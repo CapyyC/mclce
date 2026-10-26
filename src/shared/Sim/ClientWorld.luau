@@ -37,6 +37,7 @@ export type ClientWorld = {
 	dimension: string,
 	resets: number, -- increments on every WELCOME (renderers drop everything)
 	drawTime: number?,
+	weather: { raining: boolean, thundering: boolean },
 	sleeping: boolean,
 	clock: number,
 	worldTime: number,
@@ -71,6 +72,7 @@ function ClientWorld.new(worldSize: number?): ClientWorld
 		dimension = "overworld",
 		resets = 0,
 		drawTime = nil,
+		weather = { raining = false, thundering = false },
 		sleeping = false,
 		clock = 0,
 		worldTime = 0,
@@ -233,6 +235,9 @@ function ClientWorld.apply(cw: ClientWorld, kind: number, args: { any })
 		elseif kind == S2C.CONTAINER then
 			cw.container = if args[1] == false then nil else args[1]
 			cw.containerChanged = true
+		elseif kind == S2C.WEATHER then
+			local w = args[1]
+			cw.weather = { raining = w.raining == true, thundering = w.thundering == true }
 		elseif kind == S2C.SLEEP then
 			cw.sleeping = args[1] == true
 		elseif kind == S2C.EXPLOSION then

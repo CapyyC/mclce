@@ -51,6 +51,7 @@ Mock.addMethods(AssetService, {
 	end,
 })
 Lighting.ClockTime = 14
+Lighting.Brightness = 2
 UserInputService.TouchEnabled = false
 local camera = Instance.new("Camera", Workspace)
 camera.CFrame = Mock.CFrame.new(0, 100, 0)
@@ -296,6 +297,15 @@ local function makeEnv(side, scriptInst)
 		UDim2 = Mock.UDim2,
 		Enum = Mock.Enum,
 		Content = Mock.Content,
+		NumberRange = { new = function(a, b)
+			return { _type = "NumberRange", Min = a, Max = b or a }
+		end },
+		NumberSequence = { new = function(v)
+			return { _type = "NumberSequence", v = v }
+		end },
+		ColorSequence = { new = function(c)
+			return { _type = "ColorSequence", c = c }
+		end },
 		task = Mock.task,
 		os = setmetatable({ clock = function()
 			return Mock.now

@@ -20,6 +20,7 @@ export type Hooks = {
 	skyLight: (x: number, y: number, z: number) -> number,
 	blockLight: (x: number, y: number, z: number) -> number,
 	skyDarken: () -> number,
+	raining: (() -> boolean)?,
 }
 
 export type BlockUpdates = {
@@ -257,7 +258,8 @@ function BlockUpdates.randomTick(bu: BlockUpdates, x: number, y: number, z: numb
 			end
 		end
 	elseif id == FARMLAND then
-		if hydrated(bu, x, y, z) then
+		local rained = bu.hooks.raining ~= nil and bu.hooks.raining() and bu.hooks.skyLight(x, y + 1, z) >= 15
+		if rained or hydrated(bu, x, y, z) then
 			if meta < 7 then
 				World.setState(w, x, y, z, FARMLAND * 16 + 7)
 			end

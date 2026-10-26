@@ -39,6 +39,7 @@ local Decorator = require("../WorldGen/Decorator")
 local Redstone = require("./Redstone")
 local Portals = require("./Portals")
 local Colors = require("../Blocks/Colors")
+local Weather = require("./Weather")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -104,6 +105,7 @@ export type GameServer = {
 	mobs: Mobs.Mobs,
 	mobsEnabled: boolean,
 	dimension: string,
+	weather: Weather.Weather,
 	asyncGenerate: ((cx: number, cz: number, dimension: string, seedText: string) -> ())?,
 	pendingGen: { [number]: boolean },
 	furnaces: { [number]: { number } }, -- position key -> {x, y, z}
@@ -163,6 +165,7 @@ function GameServer.new(opts: Options): GameServer
 		mobsEnabled = opts.mobs ~= false,
 		dimension = opts.dimension or "overworld",
 		asyncGenerate = opts.asyncGenerate,
+		weather = Weather.new(seed.lo + 99),
 		pendingGen = {},
 		furnaces = {},
 		spawners = {},
@@ -210,6 +213,9 @@ function GameServer.new(opts: Options): GameServer
 		skyDarken = function()
 			return Time.skyDarken(gs.worldTime)
 		end,
+		raining = function()
+			return gs.dimension ~= "nether" and gs.weather.raining
+		end,
 	}, seed.lo + 13)
 	World.addListener(world, function(x, y, z, old, new)
 		LightEngine.onBlockChanged(gs.light, x, y, z, old // 16, new // 16)
@@ -241,6 +247,7 @@ function GameServer.open(gs: GameServer): (boolean, string?)
 			gs.generator = WorldGenerator.new(WorldSeed.fromString(seedText), { cacheCapacity = 256, dimension = gs.dimension })
 		end
 		gs.worldTime = tonumber(gs.save.meta.time) or 0
+		Weather.load(gs.weather, gs.save.meta.weather)
 	end
 	return true, nil
 end
@@ -407,6 +414,7 @@ function GameServer._join(gs: GameServer, p: Player)
 	p.sentCount = 0
 	p.sentInvVersion = -1
 	p.sentVitals = ""
+	send(gs, p.id, S2C.WEATHER, if gs.dimension == "nether" then { raining = false, thundering = false } else Weather.snapshot(gs.weather))
 	send(gs, p.id, S2C.WELCOME, { seed = gs.seedText, size = gs.world.maxX - gs.world.minX + 1, x = p.x, y = p.y, z = p.z, gamemode = p.gamemode, dimension = gs.dimension })
 end
 
@@ -1364,7 +1372,7 @@ function GameServer._mobContext(gs: GameServer): Mobs.Context
 			table.insert(views, { id = p.id, x = p.x, y = p.y, z = p.z, attackable = p.gamemode == "survival" and not p.vitals.dead })
 		end
 	end
-	local darken = Time.skyDarken(gs.worldTime)
+	local darken = Time.skyDarken(gs.worldTime) + (if gs.dimension == "nether" then 0 else Weather.darken(gs.weather))
 	return {
 		players = views,
 		getState = function(x, y, z)
@@ -1379,7 +1387,7 @@ function GameServer._mobContext(gs: GameServer): Mobs.Context
 		light = function(x, y, z)
 			return LightEngine.light(le, x, y, z, darken)
 		end,
-		isDay = gs.dimension ~= "nether" and Time.isDay(gs.worldTime),
+		isDay = gs.dimension ~= "nether" and Time.isDay(gs.worldTime) and not Weather.storming(gs.weather),
 		spawnList = if gs.dimension == "nether" then { "zombie_pigman" } else nil,
 		eatGrass = function(x, y, z)
 			if World.getId(world, x, y, z) == 2 then
@@ -1616,6 +1624,11 @@ end
 function GameServer.tick(gs: GameServer)
 	gs.tickCount += 1
 	gs.worldTime = (gs.worldTime + 1) % 24000
+	if gs.dimension ~= "nether" and Weather.tick(gs.weather) then
+		for _, p in gs.players do
+			send(gs, p.id, S2C.WEATHER, Weather.snapshot(gs.weather))
+		end
+	end
 	-- refill action tokens
 	local refill = Config.ACTIONS_PER_SECOND / Config.TICK_RATE
 	for _, p in gs.players do
@@ -1809,6 +1822,7 @@ function GameServer.autosave(gs: GameServer, budget: number): number
 		end
 	end
 	SaveManager.setMeta(sm, "time", gs.worldTime)
+	SaveManager.setMeta(sm, "weather", Weather.record(gs.weather))
 	local n = SaveManager.flush(sm, budget)
 	SaveManager.evictRegions(sm, function(cx, cz)
 		return World.isLoaded(gs.world, cx * 16, cz * 16)

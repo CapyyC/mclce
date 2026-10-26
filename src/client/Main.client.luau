@@ -20,6 +20,7 @@ local Input = require(script.Parent.Input)
 local LegacyMenus = require(script.Parent.LegacyMenus)
 local MobRenderer = require(script.Parent.MobRenderer)
 local ContainerMenu = require(script.Parent.ContainerMenu)
+local WeatherFx = require(script.Parent.WeatherFx)
 
 local BS = Config.BLOCK_SIZE
 local C2S_KIND, S2C_KIND = Protocol.C2S, Protocol.S2C
@@ -37,6 +38,7 @@ local rendererKind = workspace:GetAttribute("mclceRenderer") or Config.RENDERER
 local renderer = if rendererKind == "mesh" then require(script.Parent.MeshRenderer).new(cw, workspace) else ChunkRenderer.new(cw, workspace)
 _G.mclceClient.renderer = renderer
 local mobRenderer = MobRenderer.new(cw, workspace)
+local weatherFx = WeatherFx.new(workspace)
 local hud = Hud.new(player:WaitForChild("PlayerGui"))
 local nearCraftingTable
 local menus = LegacyMenus.new(player.PlayerGui, {
@@ -282,6 +284,7 @@ RunService.RenderStepped:Connect(function(dt)
 
 	renderItems()
 	cw.clock += dt
+	weatherFx:update(cw.weather, cam.CFrame.Position, cw.dimension)
 	mobRenderer:update()
 	mobRenderer:endFrame()
 	for _, e in cw.explosions do

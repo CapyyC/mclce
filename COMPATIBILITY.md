@@ -45,6 +45,7 @@ Console / classic numeric-ID Minecraft (wiki-level facts), never code.
 | Redstone (wire, torches, levers, buttons, plates, lamps, blocks, doors, repeaters) | RS, PART | No comparators, pistons, hoppers; no quasi-connectivity, repeater locking or torch burnout. |
 | Beds: sleep 12541–23458, monsters within 8 block sleep, all asleep 100 t → morning, spawn point, explode (power 5) in the Nether | RS | |
 | Bows: charge f = (t²+2t)/3, speed 3f, arrow damage ceil(speed·2) | RS, PART | No crits/enchantments; arrows not recoverable. |
-| End, weather, enchanting, brewing | NI | |
+| Weather: rain 12000–179999 t clear / 12000–23999 t rain, thunder cycle; storms allow daytime spawns; rain hydrates farmland | RS, PART | Darkening 3/8 INF; no lightning, snow accumulation or fire. |
+| End, enchanting, brewing | NI | |
 | Legacy UI (menus, tooltips, controller focus) | NI | Only functional HUD/crafting list. |
 | Save format | n/a | Own DataStore schema (regions of 4x4 chunks); not console-save compatible by design. |

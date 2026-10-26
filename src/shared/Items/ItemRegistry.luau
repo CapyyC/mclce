@@ -100,6 +100,8 @@ end
 add({ id = 334, name = "leather", maxStack = 64 })
 add({ id = 259, name = "flint_and_steel", maxStack = 1, durability = 64 })
 add({ id = 406, name = "quartz", maxStack = 64 })
+add({ id = 355, name = "bed_item", maxStack = 1, block = 26 })
+add({ id = 261, name = "bow", maxStack = 1, durability = 384 })
 add({ id = 371, name = "gold_nugget", maxStack = 64 })
 
 add({ id = 359, name = "shears", maxStack = 1, tool = "shears", tier = 0, speed = 15, durability = 238 })

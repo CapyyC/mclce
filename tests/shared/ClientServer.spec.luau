@@ -151,6 +151,25 @@ return function(t)
 			t.truthy(cw.mobs[cow.id].hurtAt >= 0, "client saw the hurt flash")
 			local _ = p
 		end)
+		t.test("bow: hold to draw, release fires along the look vector", function()
+			local gs = GameServer.new({ seed = "integration", viewRadius = 1, genBudget = 50, sendBudget = 50, mobs = false })
+			local p = GameServer.addPlayer(gs, 1, "a")
+			local cw = ClientWorld.new()
+			local clients = { [1] = cw }
+			p.inventory.slots[1] = ItemStack.new(261, 1)
+			p.inventory.slots[2] = ItemStack.new(262, 3)
+			p.inventory.selected = 1
+			p.inventory.version += 1
+			pump(gs, clients)
+			for _ = 1, 25 do
+				ClientWorld.updateUsing(cw, true, 1 / 20, 1, 0, 0)
+				pump(gs, clients)
+			end
+			ClientWorld.updateUsing(cw, false, 1 / 20, 1, 0, 0)
+			pump(gs, clients)
+			t.eq(gs.stats.arrowsShot, 1)
+			t.eq(Inventory.count(p.inventory, 262), 2)
+		end)
 		t.test("malformed server payloads don't crash the client", function()
 			local cw = ClientWorld.new()
 			ClientWorld.apply(cw, 2, { buffer.fromstring("garbage") })

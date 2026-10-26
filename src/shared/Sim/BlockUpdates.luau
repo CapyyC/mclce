@@ -91,6 +91,8 @@ local function supported(bu: BlockUpdates, x: number, y: number, z: number, stat
 		return true
 	elseif id == SNOW_LAYER then
 		return solidTop(below) or below == LEAVES or below == LEAVES2
+	elseif id == 26 then -- bed halves sit on solid ground
+		return solidTop(below)
 	elseif id == 90 then -- nether portal
 		return Portals.supported(bu.world, x, y, z, state % 16)
 	elseif id == 55 or id == 70 or id == 72 then -- wire, pressure plates

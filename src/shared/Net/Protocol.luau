@@ -42,6 +42,7 @@ Protocol.S2C = {
 	RESPAWNED = 12, -- x, y, z
 	MOBS = 13, -- { spawned = {{id,type,x,y,z,yaw,health}}, moved = {{id,x,y,z,yaw}}, removed = {id}, hurt = {id} }
 	EXPLOSION = 14, -- x, y, z, power
+	SLEEP = 17, -- boolean sleeping
 	DIMS = 16, -- { [tostring(userId)] = dimension } for hiding players in other dimensions
 	CONTAINER = 15, -- { x, y, z, state = BlockEntities.snapshot } or false when closed
 	ITEMS = 10, -- { spawned = {{id,x,y,z,item,meta,count}}, moved = {{id,x,y,z}}, removed = {id} }
@@ -69,6 +70,20 @@ function Protocol.decodeC2S(kind: any, args: { any }): Message?
 		return nil
 	end
 	local C = Protocol.C2S
+	if kind == C.USE_FINISH and #args == 3 then
+		-- optional aim direction (bows)
+		local x, y, z = args[1], args[2], args[3]
+		for _, v in { x, y, z } do
+			if type(v) ~= "number" or v ~= v or math.abs(v) > 1.01 then
+				return nil
+			end
+		end
+		local len = math.sqrt(x * x + y * y + z * z)
+		if len < 0.9 or len > 1.1 then
+			return nil
+		end
+		return { kind = kind, dx = x / len, dy = y / len, dz = z / len }
+	end
 	if kind == C.HELLO or kind == C.CANCEL_BREAK or kind == C.CLOSE_CONTAINER or kind == C.RESPAWN or kind == C.USE_START or kind == C.USE_FINISH or kind == C.JOIN then
 		return if #args == 0 then { kind = kind } else nil
 	elseif kind == C.START_BREAK or kind == C.FINISH_BREAK then

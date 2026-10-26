@@ -260,7 +260,8 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	a.placePressed = false
 	-- eating: hold "use" while not aiming at a block
-	ClientWorld.updateUsing(cw, a.placeHeld and hit == nil, dt)
+	local usingBow = ClientWorld.held(cw) ~= nil and ClientWorld.held(cw).id == 261
+	ClientWorld.updateUsing(cw, a.placeHeld and (hit == nil or usingBow), dt, look.X, look.Y, look.Z)
 	local armor = 0
 	for slot = 37, 40 do
 		local s = cw.inventory.slots[slot]

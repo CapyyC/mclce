@@ -120,6 +120,7 @@ add(20, "glass", cube(0.3, { 220, 240, 255 }, "Glass", { all = "glass" }, { laye
 add(21, "lapis_ore", cube(3.0, { 102, 112, 134 }, "Slate", { all = "lapis_ore" }, pick(1)))
 add(22, "lapis_block", cube(3.0, { 30, 67, 140 }, "SmoothPlastic", { all = "lapis_block" }, pick(1)))
 add(24, "sandstone", cube(0.8, { 216, 203, 155 }, "Sandstone", { top = "sandstone_top", bottom = "sandstone_bottom", side = "sandstone_normal" }, PICK))
+add(26, "bed", { layer = "cutout", shape = "bed", solid = true, hardness = 0.2, light = 0, opacity = 0, harvest = 0, needsTool = false, color = { 160, 30, 30 }, material = "Fabric", textures = { all = "bed_feet_top" }, replaceable = false, gravity = false, flammable = true, drops = 355 })
 add(30, "web", plant({ 220, 220, 220 }, "web", { hardness = 4.0, tool = "sword", flammable = false }))
 add(31, "tallgrass", plant({ 86, 150, 50 }, "tallgrass", { replaceable = true, drops = 0 }))
 add(32, "deadbush", plant({ 123, 79, 25 }, "deadbush", { replaceable = true, drops = 0 }))

@@ -61,6 +61,9 @@ export type Player = {
 	knownMobs: { [number]: boolean },
 	portalTicks: number,
 	portalCooldown: number,
+	sleeping: { x: number, y: number, z: number, ticks: number }?,
+	spawn: { number }?, -- bed position (foot) or nil for world spawn
+	drawing: { tick: number, slot: number }?, -- bow charge
 	open: { x: number, y: number, z: number, version: number }?,
 	lastX: number,
 	lastZ: number,
@@ -337,6 +340,9 @@ function GameServer.addPlayer(gs: GameServer, id: number, name: string, record: 
 		knownMobs = {},
 		portalTicks = 0,
 		portalCooldown = 100,
+		sleeping = nil,
+		spawn = nil,
+		drawing = nil,
 		lastX = x,
 		lastZ = z,
 	}
@@ -392,6 +398,9 @@ function GameServer._applyRecord(p: Player, r: { [string]: any })
 	if type(r.selected) == "number" then
 		Inventory.select(p.inventory, r.selected)
 	end
+	if type(r.spawn) == "table" and #r.spawn == 3 then
+		p.spawn = { r.spawn[1], r.spawn[2], r.spawn[3] }
+	end
 end
 
 function GameServer.playerRecord(p: Player): { [string]: any }
@@ -406,7 +415,7 @@ function GameServer.playerRecord(p: Player): { [string]: any }
 		Inventory.returnCursor(p.inventory)
 	end
 	local v = p.vitals
-	return { pos = { p.x, p.y, p.z }, gamemode = p.gamemode, health = if v.dead then 20 else v.health, food = v.food, saturation = v.saturation, inventory = inv, selected = p.inventory.selected }
+	return { pos = { p.x, p.y, p.z }, gamemode = p.gamemode, health = if v.dead then 20 else v.health, food = v.food, saturation = v.saturation, inventory = inv, selected = p.inventory.selected, spawn = p.spawn }
 end
 
 function GameServer.removePlayer(gs: GameServer, id: number): { [string]: any }?
@@ -472,6 +481,25 @@ end
 local function doBreak(gs: GameServer, p: Player, x: number, y: number, z: number)
 	local state = World.getState(gs.world, x, y, z)
 	local id = state // 16
+	if id == 26 then
+		local meta = state % 16
+		local d = meta % 4
+		local sx = if d == 3 then 1 elseif d == 1 then -1 else 0
+		local sz = if d == 0 then 1 elseif d == 2 then -1 else 0
+		local sign = if meta >= 8 then -1 else 1 -- head points back to its foot
+		local ox, oz = x + sx * sign, z + sz * sign
+		if World.getId(gs.world, ox, y, oz) == 26 then
+			World.setState(gs.world, ox, y, oz, 0)
+		end
+		if meta >= 8 then
+			-- drop from the foot only
+			World.setState(gs.world, x, y, z, 0)
+			if p.gamemode == "survival" then
+				ItemEntities.spawn(gs.items, x + 0.5, y + 0.5, z + 0.5, ItemStack.new(355, 1))
+			end
+			return
+		end
+	end
 	if (id == 64 or id == 71) and state % 16 >= 8 then
 		-- breaking the upper half breaks the door from its lower half (one drop)
 		if World.getId(gs.world, x, y - 1, z) == id then
@@ -652,6 +680,10 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 	if Redstone.use(gs.redstone, tx, ty, tz) then
 		return
 	end
+	if World.getId(gs.world, tx, ty, tz) == 26 then
+		GameServer._useBed(gs, p, tx, ty, tz)
+		return
+	end
 	local held = Inventory.held(p.inventory)
 	local def = if held then ItemRegistry.get(held.id) else nil
 	if held and def and GameServer._useItem(gs, p, held, def, tx, ty, tz, face) then
@@ -717,6 +749,19 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 		if not BlockRegistry.occludes(World.getId(gs.world, x, y - 1, z)) then
 			return reject(gs, p, x, y, z)
 		end
+	elseif blockId == 26 then
+		-- beds: foot here, head one block away from the player (meta 0 +z, 1 -x, 2 -z, 3 +x)
+		local dx, dz = (x + 0.5) - p.x, (z + 0.5) - p.z
+		meta = if math.abs(dx) > math.abs(dz) then (if dx > 0 then 3 else 1) else (if dz > 0 then 0 else 2)
+		local hx, hz = x + (if meta == 3 then 1 elseif meta == 1 then -1 else 0), z + (if meta == 0 then 1 elseif meta == 2 then -1 else 0)
+		if not BlockRegistry.isReplaceable(World.getId(gs.world, hx, y, hz)) or not BlockRegistry.occludes(World.getId(gs.world, x, y - 1, z)) or not BlockRegistry.occludes(World.getId(gs.world, hx, y - 1, hz)) then
+			return reject(gs, p, x, y, z)
+		end
+		World.setStates(gs.world, { x, y, z, 26 * 16 + meta, hx, y, hz, 26 * 16 + meta + 8 })
+		if p.gamemode == "survival" then
+			Inventory.consumeHeld(p.inventory, 1)
+		end
+		return
 	elseif blockId == 64 or blockId == 71 then
 		-- doors: two blocks tall on solid ground, facing away from the player
 		if y >= 255 or not BlockRegistry.occludes(World.getId(gs.world, x, y - 1, z)) or not BlockRegistry.isReplaceable(World.getId(gs.world, x, y + 1, z)) then
@@ -822,18 +867,23 @@ function GameServer.handle(gs: GameServer, id: number, kind: any, args: { any })
 	elseif k == C2S.RESPAWN then
 		if p.vitals.dead then
 			Survival.respawn(p.vitals)
-			local x, y, z = GameServer.spawnPoint(gs)
+			local x, y, z = GameServer._respawnPoint(gs, p)
 			GameServer.teleport(gs, p.id, x, y, z)
 			send(gs, p.id, S2C.RESPAWNED, x, y, z)
 		end
 	elseif k == C2S.USE_START then
 		local held = Inventory.held(p.inventory)
 		local def = if held then ItemRegistry.get(held.id) else nil
-		if def and def.food and p.vitals.food < Survival.MAX_FOOD then
+		if held and held.id == 261 and (p.gamemode == "creative" or Inventory.count(p.inventory, 262) > 0) then
+			p.drawing = { tick = gs.tickCount, slot = p.inventory.selected }
+			p.eating = nil
+		elseif def and def.food and p.vitals.food < Survival.MAX_FOOD then
 			p.eating = { tick = gs.tickCount, slot = p.inventory.selected }
 		else
 			p.eating = nil
 		end
+	elseif k == C2S.USE_FINISH and p.drawing then
+		GameServer._releaseBow(gs, p, m.dx, m.dy, m.dz)
 	elseif k == C2S.USE_FINISH then
 		local e = p.eating
 		p.eating = nil
@@ -1103,6 +1153,126 @@ function GameServer._tickSpawners(gs: GameServer)
 	end
 end
 
+-- Beds ---------------------------------------------------------------------
+
+function GameServer.isNight(gs: GameServer): boolean
+	local t = gs.worldTime % 24000
+	return t >= 12541 and t <= 23458
+end
+
+function GameServer._useBed(gs: GameServer, p: Player, x: number, y: number, z: number)
+	if gs.dimension == "nether" then
+		-- beds explode outside the Overworld (classic)
+		World.setState(gs.world, x, y, z, 0)
+		GameServer.explode(gs, x + 0.5, y + 0.5, z + 0.5, 5)
+		return
+	end
+	local st = World.getState(gs.world, x, y, z)
+	if st % 16 >= 8 then
+		-- clicked the head: find the foot
+		local d = st % 4
+		x -= if d == 3 then 1 elseif d == 1 then -1 else 0
+		z -= if d == 0 then 1 elseif d == 2 then -1 else 0
+	end
+	p.spawn = { x, y, z }
+	if not GameServer.isNight(gs) then
+		send(gs, p.id, S2C.CHAT, "", "You can only sleep at night")
+		return
+	end
+	for _, mob in gs.mobs.list do
+		if mob.kind.hostile and not mob.kind.neutral and math.abs(mob.x - x) < 8 and math.abs(mob.y - y) < 5 and math.abs(mob.z - z) < 8 then
+			send(gs, p.id, S2C.CHAT, "", "You may not rest now, there are monsters nearby")
+			return
+		end
+	end
+	p.sleeping = { x = x, y = y, z = z, ticks = 0 }
+	send(gs, p.id, S2C.SLEEP, true)
+end
+
+local function wake(gs: GameServer, p: Player)
+	if p.sleeping then
+		p.sleeping = nil
+		send(gs, p.id, S2C.SLEEP, false)
+	end
+end
+
+function GameServer._tickSleep(gs: GameServer)
+	local any, all = false, true
+	for _, p in gs.players do
+		local s = p.sleeping
+		if s then
+			any = true
+			s.ticks += 1
+			if math.abs(p.x - s.x - 0.5) > 2 or math.abs(p.z - s.z - 0.5) > 2 or World.getId(gs.world, s.x, s.y, s.z) ~= 26 or p.vitals.dead then
+				wake(gs, p)
+				all = false
+			elseif s.ticks < 100 then
+				all = false
+			end
+		elseif p.joined and not p.vitals.dead then
+			all = false
+		end
+	end
+	if any and all then
+		-- everyone asleep for 5 s: skip to morning
+		gs.worldTime = 0
+		for _, p in gs.players do
+			wake(gs, p)
+			send(gs, p.id, S2C.TIME, gs.worldTime)
+		end
+		count(gs, "nightsSkipped")
+	end
+end
+
+-- Respawn position: next to the player's bed if it still exists.
+function GameServer._respawnPoint(gs: GameServer, p: Player): (number, number, number)
+	local s = p.spawn
+	if s and World.isLoaded(gs.world, s[1], s[3]) and World.getId(gs.world, s[1], s[2], s[3]) == 26 then
+		for _, o in { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 }, { 1, 1 }, { -1, -1 } } do
+			local x, z = s[1] + o[1], s[3] + o[2]
+			if World.getId(gs.world, x, s[2], z) == 0 and World.getId(gs.world, x, s[2] + 1, z) == 0 and BlockRegistry.isSolid(World.getId(gs.world, x, s[2] - 1, z)) then
+				return x + 0.5, s[2], z + 0.5
+			end
+		end
+		return s[1] + 0.5, s[2] + 0.5625, s[3] + 0.5
+	end
+	if s then
+		send(gs, p.id, S2C.CHAT, "", "Your home bed was missing or obstructed")
+		p.spawn = nil
+	end
+	return GameServer.spawnPoint(gs)
+end
+
+-- Bows (classic charge curve): f = (t^2 + 2t) / 3 with t = seconds drawn, capped at 1;
+-- arrow speed 3f blocks/tick; full draw is a critical hit.
+function GameServer._releaseBow(gs: GameServer, p: Player, dx: number?, dy: number?, dz: number?)
+	local d = p.drawing
+	p.drawing = nil
+	local held = Inventory.held(p.inventory)
+	if d == nil or held == nil or held.id ~= 261 or d.slot ~= p.inventory.selected or dx == nil or dy == nil or dz == nil then
+		p.rejected += 1
+		return
+	end
+	local secs = (gs.tickCount - d.tick) / 20
+	local f = math.min(1, (secs * secs + secs * 2) / 3)
+	if f < 0.1 then
+		return
+	end
+	if p.gamemode == "survival" then
+		if Inventory.remove(p.inventory, 262, nil, 1) < 1 then
+			return
+		end
+		local nd = held.damage + 1
+		p.inventory.slots[p.inventory.selected] = if nd >= 384 then nil else ItemStack.new(261, 1, 0, nd)
+		p.inventory.version += 1
+	end
+	local arrow = Mobs.spawn(gs.mobs, MobTypes.byName("arrow"), p.x + (dx :: number) * 0.5, p.y + 1.52, p.z + (dz :: number) * 0.5)
+	local speed = f * 3
+	arrow.vx, arrow.vy, arrow.vz = (dx :: number) * speed, (dy :: number) * speed, (dz :: number) * speed
+	arrow.ownerPlayer = p.id
+	count(gs, "arrowsShot")
+end
+
 -- Mobs & combat -------------------------------------------------------------
 
 function GameServer._mobContext(gs: GameServer): Mobs.Context
@@ -1325,6 +1495,7 @@ function GameServer.tick(gs: GameServer)
 			gs.failedLoads[k] = nil
 		end
 	end
+	GameServer._tickSleep(gs)
 	-- survival, portal timers
 	for _, p in gs.players do
 		GameServer._tickSurvival(gs, p)

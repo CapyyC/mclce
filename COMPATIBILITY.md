@@ -43,6 +43,8 @@ Console / classic numeric-ID Minecraft (wiki-level facts), never code.
 | Nether size / coordinate scale | UNK | Configurable `Config.NETHER_SCALE` (default 1:3, 288-block Nether for Classic). Java uses 1:8; PS4 1.95 value not verified. |
 | Portals: obsidian frames 2..21 x 3..21, flint & steel, 4 s standing, exit search 16 blocks / creation | RS, PART | Nether lava 10 t / 1 per block; water evaporates. |
 | Redstone (wire, torches, levers, buttons, plates, lamps, blocks, doors) | RS, PART | No repeaters, comparators, pistons, hoppers; no quasi-connectivity or torch burnout. |
+| Beds: sleep 12541–23458, monsters within 8 block sleep, all asleep 100 t → morning, spawn point, explode (power 5) in the Nether | RS | |
+| Bows: charge f = (t²+2t)/3, speed 3f, arrow damage ceil(speed·2) | RS, PART | No crits/enchantments; arrows not recoverable. |
 | End, weather, enchanting, brewing | NI | |
 | Legacy UI (menus, tooltips, controller focus) | NI | Only functional HUD/crafting list. |
 | Save format | n/a | Own DataStore schema (regions of 4x4 chunks); not console-save compatible by design. |

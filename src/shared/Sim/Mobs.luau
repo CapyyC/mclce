@@ -36,6 +36,7 @@ export type Mob = {
 	persistent: boolean,
 	wantJump: boolean,
 	angryAt: number?, -- neutral mobs: player id that hurt them
+	ownerPlayer: number?, -- arrows shot by a player
 }
 
 export type PlayerView = { id: number, x: number, y: number, z: number, attackable: boolean }
@@ -332,7 +333,21 @@ local function tickArrow(m: Mobs, a: Mob, ctx: Context)
 	local steps = 4
 	for _ = 1, steps do
 		local nx, ny, nz = a.x + a.vx / steps, a.y + a.vy / steps, a.z + a.vz / steps
+		if a.ownerPlayer then
+			for _, mob in m.list do
+				local k = mob.kind
+				if not k.projectile and nx > mob.x - k.width / 2 and nx < mob.x + k.width / 2 and nz > mob.z - k.width / 2 and nz < mob.z + k.width / 2 and ny > mob.y and ny < mob.y + k.height then
+					local speed = math.sqrt(a.vx * a.vx + a.vy * a.vy + a.vz * a.vz)
+					Mobs.hurt(m, mob, math.ceil(speed * 2), a.x, a.z, ctx, a.ownerPlayer)
+					Mobs.remove(m, a.id)
+					return
+				end
+			end
+		end
 		for _, p in ctx.players do
+			if a.ownerPlayer == p.id and a.age < 5 then
+				continue -- don't hit the shooter right after release
+			end
 			if nx > p.x - 0.3 and nx < p.x + 0.3 and nz > p.z - 0.3 and nz < p.z + 0.3 and ny > p.y and ny < p.y + 1.8 then
 				local speed = math.sqrt(a.vx * a.vx + a.vy * a.vy + a.vz * a.vz)
 				if p.attackable then

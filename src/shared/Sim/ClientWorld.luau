@@ -36,6 +36,8 @@ export type ClientWorld = {
 	containerChanged: boolean,
 	dimension: string,
 	resets: number, -- increments on every WELCOME (renderers drop everything)
+	drawTime: number?,
+	sleeping: boolean,
 	clock: number,
 	worldTime: number,
 	chat: { { string } },
@@ -68,6 +70,8 @@ function ClientWorld.new(worldSize: number?): ClientWorld
 		containerChanged = false,
 		dimension = "overworld",
 		resets = 0,
+		drawTime = nil,
+		sleeping = false,
 		clock = 0,
 		worldTime = 0,
 		chat = {},
@@ -221,6 +225,8 @@ function ClientWorld.apply(cw: ClientWorld, kind: number, args: { any })
 		elseif kind == S2C.CONTAINER then
 			cw.container = if args[1] == false then nil else args[1]
 			cw.containerChanged = true
+		elseif kind == S2C.SLEEP then
+			cw.sleeping = args[1] == true
 		elseif kind == S2C.EXPLOSION then
 			table.insert(cw.explosions, { args[1], args[2], args[3], args[4] })
 		elseif kind == S2C.TIME then
@@ -390,8 +396,26 @@ ClientWorld.EAT_SECONDS = 1.6
 
 -- Called every frame with whether "use" is held and nothing is targeted.
 -- Eating: hold for 1.6 s (32 ticks) with food in hand.
-function ClientWorld.updateUsing(cw: ClientWorld, held: boolean, dt: number)
+function ClientWorld.updateUsing(cw: ClientWorld, held: boolean, dt: number, lookX: number?, lookY: number?, lookZ: number?)
 	local item = ClientWorld.held(cw)
+	-- bows: draw while held, release fires along the look direction
+	if item and item.id == 261 then
+		if held and not cw.vitals.dead then
+			if cw.drawTime == nil then
+				cw.drawTime = 0
+				out(cw, C2S.USE_START)
+			else
+				cw.drawTime += dt
+			end
+		elseif cw.drawTime ~= nil then
+			cw.drawTime = nil
+			if lookX and lookY and lookZ then
+				out(cw, C2S.USE_FINISH, lookX, lookY, lookZ)
+			end
+		end
+		return
+	end
+	cw.drawTime = nil
 	local def = if item then ItemRegistry.get(item.id) else nil
 	local canEat = held and def ~= nil and def.food ~= nil and cw.vitals.food < 20 and not cw.vitals.dead
 	local u = cw.using

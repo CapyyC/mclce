@@ -20,6 +20,9 @@ end
 -- Collision height of a block state in [0, 1] (0 = passable).
 local function solidHeight(state: number): number
 	local id = state // 16
+	if id == 26 then
+		return 0.5625 -- beds are 9/16 tall
+	end
 	if id == 64 or id == 71 then
 		-- doors collide while closed (approximation: full cell, lower half's open bit)
 		local meta = state % 16

@@ -139,6 +139,31 @@ add(49, "obsidian", cube(50.0, { 20, 18, 29 }, "Glass", { all = "obsidian" }, pi
 add(50, "torch", { layer = "cutout", shape = "torch", solid = false, hardness = 0, light = 14, opacity = 0, harvest = 0, needsTool = false, color = { 255, 216, 0 }, material = "Neon", textures = { all = "torch_on" }, replaceable = false, gravity = false, flammable = false })
 add(52, "mob_spawner", cube(5.0, { 26, 39, 49 }, "DiamondPlate", { all = "mob_spawner" }, { layer = "cutout", opacity = 0, tool = "pickaxe", needsTool = true, drops = 0 }))
 add(54, "chest", cube(2.5, { 164, 116, 42 }, "WoodPlanks", { all = "chest" }, { tool = "axe", opacity = 0, layer = "cutout" }))
+local function redstonePart(color: { number }, tex: string, shape: string, extra: Partial?): Partial
+	local p: Partial = {
+		layer = "cutout", shape = shape, solid = false, hardness = 0, light = 0, opacity = 0,
+		harvest = 0, needsTool = false, color = color, material = "SmoothPlastic", textures = { all = tex },
+		replaceable = false, gravity = false, flammable = false,
+	}
+	if extra then
+		for k, v in extra do
+			p[k] = v
+		end
+	end
+	return p
+end
+add(55, "redstone_wire", redstonePart({ 170, 0, 0 }, "redstone_dust_line", "flat", { drops = 331 }))
+add(64, "wooden_door", redstonePart({ 145, 110, 70 }, "door_wood_lower", "door", { hardness = 3.0, tool = "axe", drops = 324 }))
+add(69, "lever", redstonePart({ 120, 100, 80 }, "lever", "torch", { hardness = 0.5 }))
+add(70, "stone_pressure_plate", redstonePart({ 125, 125, 125 }, "stone", "flat", { hardness = 0.5, tool = "pickaxe", needsTool = true }))
+add(71, "iron_door", redstonePart({ 200, 200, 200 }, "door_iron_lower", "door", { hardness = 5.0, tool = "pickaxe", needsTool = true, drops = 330 }))
+add(72, "wooden_pressure_plate", redstonePart({ 157, 128, 79 }, "planks_oak", "flat", { hardness = 0.5, tool = "axe" }))
+add(75, "unlit_redstone_torch", redstonePart({ 100, 0, 0 }, "redstone_torch_off", "torch", { drops = 76 }))
+add(76, "redstone_torch", redstonePart({ 255, 40, 40 }, "redstone_torch_on", "torch", { light = 7 }))
+add(77, "stone_button", redstonePart({ 125, 125, 125 }, "stone", "torch", { hardness = 0.5 }))
+add(123, "redstone_lamp", cube(0.3, { 110, 70, 40 }, "Glass", { all = "redstone_lamp_off" }))
+add(124, "lit_redstone_lamp", cube(0.3, { 250, 200, 120 }, "Neon", { all = "redstone_lamp_on" }, { light = 15, drops = 123 }))
+add(152, "redstone_block", cube(5.0, { 170, 20, 10 }, "SmoothPlastic", { all = "redstone_block" }, { tool = "pickaxe", needsTool = true }))
 add(56, "diamond_ore", cube(3.0, { 129, 140, 143 }, "Slate", { all = "diamond_ore" }, pick(2)))
 add(57, "diamond_block", cube(5.0, { 98, 219, 214 }, "Ice", { all = "diamond_block" }, pick(2)))
 add(58, "crafting_table", cube(2.5, { 120, 73, 42 }, "WoodPlanks", { top = "crafting_table_top", bottom = "planks_oak", side = "crafting_table_side" }, { tool = "axe", flammable = true }))

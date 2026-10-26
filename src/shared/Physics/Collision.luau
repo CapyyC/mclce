@@ -20,6 +20,11 @@ end
 -- Collision height of a block state in [0, 1] (0 = passable).
 local function solidHeight(state: number): number
 	local id = state // 16
+	if id == 64 or id == 71 then
+		-- doors collide while closed (approximation: full cell, lower half's open bit)
+		local meta = state % 16
+		return if meta < 8 and meta >= 4 then 0 else 1
+	end
 	if not BlockRegistry.isSolid(id) then
 		return 0
 	end

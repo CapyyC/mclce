@@ -90,7 +90,14 @@ local function supported(bu: BlockUpdates, x: number, y: number, z: number, stat
 		return true
 	elseif id == SNOW_LAYER then
 		return solidTop(below) or below == LEAVES or below == LEAVES2
-	elseif id == TORCH then
+	elseif id == 55 or id == 70 or id == 72 then -- wire, pressure plates
+		return solidTop(below)
+	elseif id == 64 or id == 71 then -- doors: lower on solid ground, upper on its lower half
+		if state % 16 >= 8 then
+			return below == id
+		end
+		return solidTop(below)
+	elseif id == TORCH or id == 75 or id == 76 or id == 69 or id == 77 then
 		-- meta 1..4 = attached to a wall (east, west, south, north side), 5/0 = floor
 		local meta = state % 16
 		if meta == 1 then

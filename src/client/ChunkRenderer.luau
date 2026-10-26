@@ -154,7 +154,19 @@ function ChunkRenderer:buildSection(cx: number, cz: number, si: number)
 		local p = self:_take()
 		local shape = def and def.shape or "cross"
 		local cxw, cyw, czw = (bx + x + 0.5) * BS, (by + y) * BS, (bz + z + 0.5) * BS
-		if shape == "slab" then
+		local collide = shape == "slab"
+		if shape == "door" then
+			-- orientation/open state live in the lower half's meta
+			local lower = if st % 16 >= 8 then World.getState(world, bx + x, by + y - 1, bz + z) else st
+			local lm = lower % 16
+			local alongZ = (lm % 4) % 2 == 0
+			if lm >= 4 then
+				alongZ = not alongZ
+			end
+			p.Size = if alongZ then Vector3.new(BS * 0.19, BS, BS) else Vector3.new(BS, BS, BS * 0.19)
+			p.CFrame = CFrame.new(cxw, cyw + BS / 2, czw)
+			collide = lm < 4
+		elseif shape == "slab" then
 			local top = st % 16 >= 8
 			p.Size = Vector3.new(BS, BS / 2, BS)
 			p.CFrame = CFrame.new(cxw, cyw + (if top then 0.75 else 0.25) * BS, czw)
@@ -171,7 +183,7 @@ function ChunkRenderer:buildSection(cx: number, cz: number, si: number)
 		p.Color = style.color
 		p.Material = style.material
 		p.Transparency = 0
-		p.CanCollide = shape == "slab"
+		p.CanCollide = collide
 		p.Parent = folder
 		table.insert(parts, p)
 	end

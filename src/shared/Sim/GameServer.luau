@@ -33,6 +33,7 @@ local Mobs = require("./Mobs")
 local Time = require("./Time")
 local BlockEntities = require("./BlockEntities")
 local BlockUpdates = require("./BlockUpdates")
+local Redstone = require("./Redstone")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -91,6 +92,8 @@ export type GameServer = {
 	mobsEnabled: boolean,
 	furnaces: { [number]: { number } }, -- position key -> {x, y, z}
 	updates: BlockUpdates.BlockUpdates,
+	redstone: Redstone.Redstone,
+	plates: { [number]: { number } },
 	randomTickRadius: number,
 	rng: JavaRandom.JavaRandom,
 	tickCount: number,
@@ -142,6 +145,8 @@ function GameServer.new(opts: Options): GameServer
 		mobsEnabled = opts.mobs ~= false,
 		furnaces = {},
 		updates = nil :: any,
+		redstone = Redstone.new(world),
+		plates = {},
 		randomTickRadius = 4,
 		rng = JavaRandom.new(seed.lo),
 		tickCount = 0,
@@ -187,6 +192,7 @@ function GameServer.new(opts: Options): GameServer
 		LightEngine.onBlockChanged(gs.light, x, y, z, old // 16, new // 16)
 		GameServer._blockEntityChange(gs, x, y, z, old // 16, new // 16)
 		BlockUpdates.onChange(gs.updates, x, y, z)
+		Redstone.onChange(gs.redstone, x, y, z, old // 16, new // 16)
 		local p = gs.pendingChanges
 		local n = #p
 		p[n + 1], p[n + 2], p[n + 3], p[n + 4] = x, y, z, new
@@ -443,6 +449,12 @@ end
 local function doBreak(gs: GameServer, p: Player, x: number, y: number, z: number)
 	local state = World.getState(gs.world, x, y, z)
 	local id = state // 16
+	if (id == 64 or id == 71) and state % 16 >= 8 then
+		-- breaking the upper half breaks the door from its lower half (one drop)
+		if World.getId(gs.world, x, y - 1, z) == id then
+			return doBreak(gs, p, x, y - 1, z)
+		end
+	end
 	World.setState(gs.world, x, y, z, 0)
 	count(gs, "blocksBroken")
 	if p.gamemode == "survival" then
@@ -596,6 +608,10 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 		GameServer._openContainer(gs, p, tx, ty, tz)
 		return
 	end
+	-- levers, buttons and wooden doors are used, not built on
+	if Redstone.use(gs.redstone, tx, ty, tz) then
+		return
+	end
 	local held = Inventory.held(p.inventory)
 	local def = if held then ItemRegistry.get(held.id) else nil
 	if held and def and GameServer._useItem(gs, p, held, def, tx, ty, tz, face) then
@@ -636,6 +652,7 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 		end
 	end
 	local meta = 0
+	local placeUpper = false
 	if blockId == 61 or blockId == 54 or blockId == 86 then
 		-- face the player: 2 north (-z), 3 south (+z), 4 west (-x), 5 east (+x)
 		local dx, dz = p.x - (x + 0.5), p.z - (z + 0.5)
@@ -649,15 +666,30 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 		meta = held.meta % 16
 	elseif blockId == 18 or blockId == 161 then
 		meta = held.meta % 4 + 4 -- player-placed leaves never decay
-	elseif blockId == 50 then
-		-- torch attaches to the clicked face
-		local TORCH_META = { [0] = 1, 2, 5, -1, 3, 4 }
-		meta = TORCH_META[face]
-		if meta < 0 then
+	elseif blockId == 50 or blockId == 76 or blockId == 69 or blockId == 77 then
+		-- torches, levers and buttons attach to the clicked face
+		local ATTACH_META = { [0] = 1, 2, 5, -1, 3, 4 }
+		meta = ATTACH_META[face]
+		if meta < 0 or (blockId == 77 and meta == 5) then
 			return reject(gs, p, x, y, z)
 		end
+	elseif blockId == 55 or blockId == 70 or blockId == 72 then
+		if not BlockRegistry.occludes(World.getId(gs.world, x, y - 1, z)) then
+			return reject(gs, p, x, y, z)
+		end
+	elseif blockId == 64 or blockId == 71 then
+		-- doors: two blocks tall on solid ground, facing away from the player
+		if y >= 255 or not BlockRegistry.occludes(World.getId(gs.world, x, y - 1, z)) or not BlockRegistry.isReplaceable(World.getId(gs.world, x, y + 1, z)) then
+			return reject(gs, p, x, y, z)
+		end
+		local dx, dz = p.x - (x + 0.5), p.z - (z + 0.5)
+		meta = if math.abs(dx) > math.abs(dz) then (if dx > 0 then 2 else 0) else (if dz > 0 then 3 else 1)
+		placeUpper = true
 	end
 	World.setState(gs.world, x, y, z, blockId * 16 + meta)
+	if placeUpper then
+		World.setState(gs.world, x, y + 1, z, blockId * 16 + 8)
+	end
 	count(gs, "blocksPlaced")
 	if p.gamemode == "survival" then
 		Inventory.consumeHeld(p.inventory, 1)
@@ -1226,6 +1258,37 @@ function GameServer.tick(gs: GameServer)
 		end
 		BlockUpdates.tickChunks(gs.updates, near)
 	end
+	-- pressure plates under players and mobs, then redstone
+	local pressed: { [number]: { number } } = {}
+	local function plateAt(x: number, y: number, z: number)
+		local bx, by, bz = math.floor(x), math.floor(y + 0.05), math.floor(z)
+		local id = World.getId(gs.world, bx, by, bz)
+		if id == 70 or id == 72 then
+			pressed[Fluids.key(bx, by, bz)] = { bx, by, bz }
+		end
+	end
+	for _, p in gs.players do
+		if not p.vitals.dead then
+			plateAt(p.x, p.y, p.z)
+		end
+	end
+	for _, mob in gs.mobs.list do
+		if not mob.kind.projectile then
+			plateAt(mob.x, mob.y, mob.z)
+		end
+	end
+	for k, pos in pressed do
+		if gs.plates[k] == nil then
+			Redstone.setPlate(gs.redstone, pos[1], pos[2], pos[3], true)
+		end
+	end
+	for k, pos in gs.plates do
+		if pressed[k] == nil then
+			Redstone.setPlate(gs.redstone, pos[1], pos[2], pos[3], false)
+		end
+	end
+	gs.plates = pressed
+	Redstone.step(gs.redstone)
 	-- fluids, furnaces
 	Fluids.step(gs.fluids)
 	GameServer._tickFurnaces(gs)

@@ -45,6 +45,7 @@ export type Player = {
 	tokens: number,
 	rejected: number, -- invalid/denied requests (diagnostics, kick heuristics)
 	loaded: boolean, -- player data finished loading
+	joined: boolean, -- client is listening; nothing is sent before this
 	vitals: Survival.Vitals,
 	sentVitals: string,
 	eating: { tick: number, slot: number }?,
@@ -222,7 +223,9 @@ function GameServer.spawnPoint(gs: GameServer): (number, number, number)
 	return 0.5, World.height(gs.world, 0, 0), 0.5
 end
 
-function GameServer.addPlayer(gs: GameServer, id: number, name: string, record: { [string]: any }?): Player
+-- `waitForJoin`: when true, nothing is sent until the client sends JOIN
+-- (the Roblox adapter uses this so no message precedes the client listener).
+function GameServer.addPlayer(gs: GameServer, id: number, name: string, record: { [string]: any }?, waitForJoin: boolean?): Player
 	local x, y, z = GameServer.spawnPoint(gs)
 	local p: Player = {
 		id = id,
@@ -239,6 +242,7 @@ function GameServer.addPlayer(gs: GameServer, id: number, name: string, record: 
 		tokens = Config.ACTION_BURST,
 		rejected = 0,
 		loaded = true,
+		joined = false,
 		vitals = Survival.new(),
 		sentVitals = "",
 		eating = nil,
@@ -250,8 +254,20 @@ function GameServer.addPlayer(gs: GameServer, id: number, name: string, record: 
 	end
 	gs.players[id] = p
 	gs.outbox[id] = {}
-	send(gs, id, S2C.WELCOME, { seed = gs.seedText, size = gs.world.maxX - gs.world.minX + 1, x = p.x, y = p.y, z = p.z, gamemode = p.gamemode })
+	if not waitForJoin then
+		GameServer._join(gs, p)
+	end
 	return p
+end
+
+function GameServer._join(gs: GameServer, p: Player)
+	-- (re)start the session for this client: welcome + resend everything
+	p.joined = true
+	p.sent = {}
+	p.sentCount = 0
+	p.sentInvVersion = -1
+	p.sentVitals = ""
+	send(gs, p.id, S2C.WELCOME, { seed = gs.seedText, size = gs.world.maxX - gs.world.minX + 1, x = p.x, y = p.y, z = p.z, gamemode = p.gamemode })
 end
 
 function GameServer._applyRecord(p: Player, r: { [string]: any })
@@ -542,6 +558,8 @@ function GameServer.handle(gs: GameServer, id: number, kind: any, args: { any })
 		for pid in gs.players do
 			send(gs, pid, S2C.CHAT, p.name, m.text)
 		end
+	elseif k == C2S.JOIN then
+		GameServer._join(gs, p)
 	elseif k == C2S.HELLO then
 		p.sentInvVersion = -1
 		p.sentVitals = ""
@@ -789,6 +807,9 @@ function GameServer.tick(gs: GameServer)
 	gs.pendingChanges = {}
 	local ev = ItemEntities.takeEvents(gs.items)
 	for _, p in gs.players do
+		if not p.joined then
+			continue
+		end
 		replicateChunks(gs, p)
 		if #changes > 0 then
 			local mine: { number } = {}

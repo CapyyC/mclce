@@ -28,7 +28,10 @@ local S2C: RemoteEvent = ReplicatedStorage:WaitForChild("mclceS2C")
 player.CameraMode = Enum.CameraMode.LockFirstPerson -- Legacy default is first person
 
 local cw = ClientWorld.new()
+-- debug handle for the Studio command bar / MCP: _G.mclceClient.cw
+_G.mclceClient = { cw = cw }
 local renderer = ChunkRenderer.new(cw, workspace)
+_G.mclceClient.renderer = renderer
 local hud = Hud.new(player:WaitForChild("PlayerGui"))
 local crafting = CraftingMenu.new(player.PlayerGui, function(recipeId, grid)
 	table.insert(cw.outgoing, { C2S_KIND.CRAFT, recipeId, grid })
@@ -46,6 +49,9 @@ S2C.OnClientEvent:Connect(function(kind, ...)
 		crafting:refresh(cw.inventory, crafting.grid)
 	end
 end)
+
+-- the server sends nothing until it knows this listener exists
+C2S:FireServer(C2S_KIND.JOIN)
 
 -- selection outline
 local selPart = Instance.new("Part")

@@ -15,4 +15,5 @@ jobs:
       - run: scripts/analyze.sh
       - run: scripts/syntax-check-roblox.sh
       - run: scripts/test.sh
+      - run: scripts/test-roblox-mock.sh
       - run: scripts/bench.sh --quick

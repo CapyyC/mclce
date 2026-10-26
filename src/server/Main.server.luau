@@ -50,6 +50,8 @@ do
 		delay = math.min(delay * 2, 30)
 	end
 end
+-- debug handle for the Studio command bar / MCP: _G.mclceServer.gs
+_G.mclceServer = { gs = gs }
 print(string.format("[mclce] world ready seed=%s persistent=%s", gs.seedText, tostring(persistent)))
 
 local ready: { [number]: boolean } = {}
@@ -79,7 +81,7 @@ Players.PlayerAdded:Connect(function(player)
 		player:Kick("Could not load your data, please rejoin.")
 		return
 	end
-	GameServer.addPlayer(gs, player.UserId, player.Name, record)
+	GameServer.addPlayer(gs, player.UserId, player.Name, record, true)
 	player.CharacterAdded:Connect(function()
 		task.defer(placeCharacter, player)
 	end)

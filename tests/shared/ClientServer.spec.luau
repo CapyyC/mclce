@@ -31,6 +31,11 @@ return function(t)
 			end
 			t.eq(cw.stats.chunks, 13)
 			t.truthy(cw.remesh.count > 0)
+			-- every dirty section belongs to a loaded chunk (no leak toward unloaded neighbours)
+			for k in cw.remesh.dirty do
+				local cx, cz = RemeshQueue.unpack(k)
+				t.truthy(World.getChunk(cw.world, cx, cz) ~= nil, "dirty section in unloaded chunk")
+			end
 			-- replica equals server for the spawn chunk
 			for y = 0, 255, 7 do
 				for x = 0, 15 do

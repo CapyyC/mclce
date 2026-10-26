@@ -8,3 +8,4 @@ coverage.out
 profile.out
 sourcemap.json
 bench/scratch/
+/tests/roblox/_bundle.luau

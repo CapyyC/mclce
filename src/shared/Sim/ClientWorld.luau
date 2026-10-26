@@ -87,7 +87,15 @@ function ClientWorld.apply(cw: ClientWorld, kind: number, args: { any })
 		elseif kind == S2C.CHUNK then
 			local chunk = ChunkCodec.decode(args[1])
 			World.putChunk(cw.world, chunk)
-			RemeshQueue.markChunk(cw.remesh, chunk.cx, chunk.cz, true, Chunk.highestSection(chunk))
+			-- own sections, plus loaded neighbours whose border faces may change
+			-- (never unloaded ones: those would stay dirty forever)
+			RemeshQueue.markChunk(cw.remesh, chunk.cx, chunk.cz, false, Chunk.highestSection(chunk))
+			for _, d in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+				local n = World.getChunk(cw.world, chunk.cx + d[1], chunk.cz + d[2])
+				if n then
+					RemeshQueue.markChunk(cw.remesh, n.cx, n.cz, false, Chunk.highestSection(n))
+				end
+			end
 			cw.stats.chunks += 1
 		elseif kind == S2C.UNLOAD then
 			local cx, cz = args[1], args[2]

@@ -23,6 +23,7 @@ Protocol.C2S = {
 	CHAT = 12, -- text
 	USE_START = 13, -- begin using held item (eating)
 	USE_FINISH = 14,
+	JOIN = 15, -- client listener is connected; server may start sending
 }
 
 Protocol.S2C = {
@@ -62,7 +63,7 @@ function Protocol.decodeC2S(kind: any, args: { any }): Message?
 		return nil
 	end
 	local C = Protocol.C2S
-	if kind == C.HELLO or kind == C.CANCEL_BREAK or kind == C.CLOSE_CONTAINER or kind == C.RESPAWN or kind == C.USE_START or kind == C.USE_FINISH then
+	if kind == C.HELLO or kind == C.CANCEL_BREAK or kind == C.CLOSE_CONTAINER or kind == C.RESPAWN or kind == C.USE_START or kind == C.USE_FINISH or kind == C.JOIN then
 		return if #args == 0 then { kind = kind } else nil
 	elseif kind == C.START_BREAK or kind == C.FINISH_BREAK then
 		local ok, x, y, z = blockPos(args)

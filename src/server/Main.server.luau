@@ -30,14 +30,26 @@ local C2S = remote("mclceC2S")
 local S2C = remote("mclceS2C")
 
 local backend, persistent = DataStoreBackend.new("mclce_world_v1")
-local dims = Dimensions.new({
+local GenWorkers = require(script.Parent.GenWorkers)
+local workers = GenWorkers.start(Config.GEN_WORKERS)
+local dims
+local dimsOpts = {
 	seed = Config.DEFAULT_SEED,
 	worldSize = Config.WORLD_SIZE,
 	worldId = "default",
 	backend = backend,
 	clock = os.clock,
-})
+	asyncGenerate = if workers then function(cx, cz, dimension, seedText)
+		workers:request(cx, cz, dimension, seedText)
+	end else nil,
+}
+dims = Dimensions.new(dimsOpts)
 local gs = dims.worlds.overworld
+if workers then
+	workers:onResult(function(dimension, chunk)
+		GameServer.deliverGenerated(dims.worlds[dimension], chunk)
+	end)
+end
 
 -- Opening must succeed before anyone can edit, or saved edits could be lost.
 do

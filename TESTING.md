@@ -60,7 +60,10 @@ the server warns and uses a NON-persistent memory backend.
 6. **Multiplayer**: Test → Start with 2 players: edits by one appear for the other; both stream.
 7. **Persistence** (API access on): place a block far from spawn, stop, play again: block is still
    there. Kill Studio mid-session after an autosave (30 s) — reload keeps edits up to that save.
-8. **Measure & record here**: Parts count (HUD), section build ms, server tick time
+8. **Parallel generation**: Output must not show "no GenWorker template". In the Developer Console
+   (server) `_G.mclceServer.gs.stats.asyncRequested` grows while streaming; the MicroProfiler should
+   show generation on worker threads. Set `Config.GEN_WORKERS = 0` to compare main-thread cost.
+9. **Measure & record here**: Parts count (HUD), section build ms, server tick time
    (`GameServer.tick` duration), client FPS at radius 6, memory (Developer Console).
 
 ## Unverified Roblox-specific performance questions

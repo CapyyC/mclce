@@ -40,6 +40,8 @@ function Task.delay(t, fn, ...)
 	resume(co)
 	return co
 end
+function Task.desynchronize() end
+function Task.synchronize() end
 function Task.wait(t)
 	local co = coroutine.running()
 	local start = Mock.now
@@ -276,6 +278,7 @@ Mock.Signal = Signal
 local Instance = {}
 local EVENTS = {
 	RemoteEvent = { "OnServerEvent", "OnClientEvent" },
+	BindableEvent = { "Event" },
 	TextButton = { "Activated", "MouseButton1Click", "MouseButton2Click", "MouseButton1Down", "MouseButton1Up" },
 	Player = { "CharacterAdded", "CharacterRemoving" },
 }
@@ -365,6 +368,41 @@ function methods:ClearAllChildren()
 		c:Destroy()
 	end
 end
+function methods:IsDescendantOf(other)
+	local p = rawget(self, "_props").Parent
+	while p do
+		if p == other then
+			return true
+		end
+		p = rawget(p, "_props").Parent
+	end
+	return false
+end
+function methods:GetActor()
+	local p = self
+	while p do
+		if rawget(p, "_class") == "Actor" then
+			return p
+		end
+		p = rawget(p, "_props").Parent
+	end
+	return nil
+end
+function methods:Clone()
+	local c = Instance.new(rawget(self, "_class"))
+	for k, v in rawget(self, "_props") do
+		if k ~= "Parent" then
+			rawget(c, "_props")[k] = v
+		end
+	end
+	for _, k in { "_path", "_methods" } do
+		rawset(c, k, rawget(self, k))
+	end
+	for _, child in rawget(self, "_children") do
+		child:Clone().Parent = c
+	end
+	return c
+end
 function methods:GetAttribute(name)
 	local a = rawget(self, "_attributes")
 	return a and a[name]
@@ -441,6 +479,9 @@ InstanceMeta.__newindex = function(self, k, v)
 			table.insert(rawget(v, "_children"), self)
 		end
 		props.Parent = v
+		if v ~= nil and Mock.onParented then
+			Mock.onParented(self, v)
+		end
 		return
 	end
 	local isPart = rawget(self, "_class") == "Part" or rawget(self, "_class") == "MeshPart"
@@ -468,6 +509,38 @@ function Instance.new(cls, parent)
 		local sig = Signal.new()
 		sig.queueing = cls == "RemoteEvent"
 		rawget(inst, "_events")[e] = sig
+	end
+	if cls == "Actor" then
+		local handlers = {}
+		Mock.addMethods(inst, {
+			BindToMessageParallel = function(_, topic, fn)
+				handlers[topic] = fn
+			end,
+			BindToMessage = function(_, topic, fn)
+				handlers[topic] = fn
+			end,
+			SendMessage = function(_, topic, ...)
+				local fn = handlers[topic]
+				assert(fn, "Actor:SendMessage to an unbound topic " .. tostring(topic))
+				local args = table.pack(...)
+				local copy = {}
+				for i = 1, args.n do
+					copy[i] = Mock.remoteCopy(args[i])
+				end
+				Task.defer(fn, table.unpack(copy, 1, args.n))
+			end,
+		})
+	elseif cls == "BindableEvent" then
+		Mock.addMethods(inst, {
+			Fire = function(self2, ...)
+				local args = table.pack(...)
+				local copy = {}
+				for i = 1, args.n do
+					copy[i] = Mock.remoteCopy(args[i])
+				end
+				self2.Event:Fire(table.unpack(copy, 1, args.n))
+			end,
+		})
 	end
 	if cls == "Part" or cls == "MeshPart" then
 		local p = rawget(inst, "_props")

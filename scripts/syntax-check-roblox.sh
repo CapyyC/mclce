@@ -6,7 +6,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ANALYZE="${LUAU_ANALYZE:-$ROOT/tools/bin/luau-analyze}"
 cd "$ROOT"
-OUT="$("$ANALYZE" --formatter=gnu $(find src/server src/client -name '*.luau') 2>&1 || true)"
+OUT="$("$ANALYZE" --formatter=gnu $(find src/server src/client src/workers -name '*.luau') 2>&1 || true)"
 if echo "$OUT" | grep -q "SyntaxError"; then
   echo "$OUT" | grep "SyntaxError"
   exit 1

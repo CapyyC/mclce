@@ -35,6 +35,7 @@ local DataStoreService = service("DataStoreService")
 local UserInputService = service("UserInputService")
 local ContextActionService = service("ContextActionService")
 local AssetService = service("AssetService")
+local ServerStorage = service("ServerStorage")
 local meshStats = { meshes = 0, triangles = 0 }
 Mock.addMethods(AssetService, {
 	CreateEditableMesh = function()
@@ -191,6 +192,7 @@ local MAP = {
 	{ "src/shared/", ReplicatedStorage, "Shared" },
 	{ "src/server/", ServerScriptService, "Server" },
 	{ "src/client/", StarterPlayer, "StarterPlayerScripts/Client" },
+	{ "src/workers/", ServerStorage, "mclceWorkers" },
 }
 local byPath = {}
 local function ensureFolder(parent, name)
@@ -219,6 +221,21 @@ for _, path in paths do
 				parent = ensureFolder(parent, segs[i])
 			end
 			local file = segs[#segs]
+			if string.match(file, "^init%.meta%.json$") then
+				local cls = string.match(bundle[path], '"className"%s*:%s*"(%w+)"')
+				if cls then
+					-- re-create the parent folder as the requested class
+					local old = parent
+					local new = originalNew(cls)
+					new.Name = old.Name
+					for _, ch in old:GetChildren() do
+						ch.Parent = new
+					end
+					new.Parent = old.Parent
+					old.Parent = nil
+				end
+				continue
+			end
 			local cls, name = "ModuleScript", string.gsub(file, "%.luau$", "")
 			if string.match(file, "%.server%.luau$") then
 				cls, name = "Script", string.gsub(file, "%.server%.luau$", "")
@@ -234,9 +251,17 @@ for _, path in paths do
 end
 
 -- Module system with a separate cache per VM side ---------------------------
-local caches = { server = {}, client = {} }
+local caches = setmetatable({ server = {}, client = {} }, { __index = function(t, k)
+	local c = {}
+	rawset(t, k, c)
+	return c
+end })
 -- Roblox's _G is a plain table shared by all scripts of one VM side
-local sideG = { server = {}, client = {} }
+local sideG = setmetatable({ server = {}, client = {} }, { __index = function(t, k)
+	local c = {}
+	rawset(t, k, c)
+	return c
+end })
 local loadModule
 
 local function dirname(p)
@@ -318,12 +343,34 @@ function loadModule(side, path)
 	return result
 end
 
-local function runScript(side, path)
+local function runScript(side, path, inst)
 	local src = bundle[path]
 	local f, err = loadstring(src, "=" .. path)
 	assert(f, err)
-	setfenv(f, makeEnv(side, byPath[path]))
+	setfenv(f, makeEnv(side, inst or byPath[path]))
 	Mock.task.spawn(f)
+end
+
+-- Scripts cloned into ServerScriptService start running, each Actor in its own VM.
+local started = {}
+local actorCount = 0
+Mock.onParented = function(inst, parent)
+	if not (parent == ServerScriptService or parent:IsDescendantOf(ServerScriptService)) then
+		return
+	end
+	local list = { inst }
+	for _, d in inst:GetDescendants() do
+		table.insert(list, d)
+	end
+	for _, d in list do
+		local path = rawget(d, "_path")
+		if path and rawget(d, "_class") == "Script" and not started[d] and string.sub(path, 1, 12) == "src/workers/" then
+			started[d] = true
+			actorCount += 1
+			local side = "actor" .. actorCount
+			runScript(side, path, d)
+		end
+	end
 end
 
 ---------------------------------------------------------------- frame loop

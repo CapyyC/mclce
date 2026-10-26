@@ -14,6 +14,7 @@ Config.GEN_BUDGET_PER_TICK = 2 -- chunk generations per server tick
 Config.SEND_BUDGET_PER_TICK = 4 -- chunk payloads per player per tick
 Config.MESH_BUDGET_PER_FRAME = 2 -- section meshes per client frame
 Config.MAX_LOADED_CHUNKS = 1500
+Config.GEN_WORKERS = 4 -- parallel generation Actors on the server (0 = generate in the main thread)
 
 -- Interaction (Legacy uses Java-derived reach: 4.5 survival / 5 creative).
 Config.REACH_SURVIVAL = 4.5

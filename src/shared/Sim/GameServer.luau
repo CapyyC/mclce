@@ -26,6 +26,7 @@ local Collision = require("../Physics/Collision")
 local ItemEntities = require("./ItemEntities")
 local JavaRandom = require("../Util/JavaRandom")
 local Faces = require("../Mesh/Faces")
+local Chunk = require("../Voxel/Chunk")
 local Survival = require("./Survival")
 local Fluids = require("./Fluids")
 local LightEngine = require("../Voxel/LightEngine")
@@ -81,6 +82,7 @@ export type Options = {
 	genBudget: number?,
 	sendBudget: number?,
 	mobs: boolean?, -- natural mob spawning (default on)
+	asyncGenerate: ((cx: number, cz: number, dimension: string, seedText: string) -> ())?, -- off-thread generation hook
 	dimension: string?, -- "overworld" (default) | "nether"
 }
 
@@ -99,6 +101,8 @@ export type GameServer = {
 	mobs: Mobs.Mobs,
 	mobsEnabled: boolean,
 	dimension: string,
+	asyncGenerate: ((cx: number, cz: number, dimension: string, seedText: string) -> ())?,
+	pendingGen: { [number]: boolean },
 	furnaces: { [number]: { number } }, -- position key -> {x, y, z}
 	spawners: { [number]: { number } },
 	updates: BlockUpdates.BlockUpdates,
@@ -154,6 +158,8 @@ function GameServer.new(opts: Options): GameServer
 		mobs = Mobs.new(seed.lo + 7),
 		mobsEnabled = opts.mobs ~= false,
 		dimension = opts.dimension or "overworld",
+		asyncGenerate = opts.asyncGenerate,
+		pendingGen = {},
 		furnaces = {},
 		spawners = {},
 		updates = nil :: any,
@@ -234,7 +240,8 @@ function GameServer.open(gs: GameServer): (boolean, string?)
 	return true, nil
 end
 
-function GameServer._loadChunk(gs: GameServer, cx: number, cz: number)
+-- sync = true forces in-thread generation (spawn point, portal arrival).
+function GameServer._loadChunk(gs: GameServer, cx: number, cz: number, sync: boolean?)
 	local chunk = nil
 	if gs.save then
 		local ok, err = SaveManager.ensureRegion(gs.save, cx, cz)
@@ -252,12 +259,41 @@ function GameServer._loadChunk(gs: GameServer, cx: number, cz: number)
 		end
 		chunk = saved
 	end
+	if chunk == nil and gs.asyncGenerate and not sync then
+		-- generated off-thread (Roblox Actors); arrives via deliverGenerated
+		gs.pendingGen[Coords.chunkKey(cx, cz)] = true
+		count(gs, "asyncRequested")
+		gs.asyncGenerate(cx, cz, gs.dimension, gs.seedText)
+		return
+	end
 	if chunk == nil then
 		chunk = WorldGenerator.generate(gs.generator, cx, cz)
 		count(gs, "generated")
 	else
 		count(gs, "loadedFromSave")
 	end
+	GameServer._installChunk(gs, chunk :: any)
+end
+
+-- Accepts an asynchronously generated chunk. Results for chunks that were
+-- unloaded (or already present) meanwhile are dropped.
+function GameServer.deliverGenerated(gs: GameServer, chunk: Chunk.Chunk): boolean
+	local k = Coords.chunkKey(chunk.cx, chunk.cz)
+	if not gs.pendingGen[k] then
+		count(gs, "staleGenerated")
+		return false
+	end
+	gs.pendingGen[k] = nil
+	if World.getChunk(gs.world, chunk.cx, chunk.cz) then
+		return false
+	end
+	count(gs, "generated")
+	GameServer._installChunk(gs, chunk)
+	return true
+end
+
+function GameServer._installChunk(gs: GameServer, chunk: Chunk.Chunk)
+	local cx, cz = chunk.cx, chunk.cz
 	World.putChunk(gs.world, chunk :: any)
 	LightEngine.addChunk(gs.light, cx, cz)
 	local bes = (chunk :: any).blockEntities
@@ -274,6 +310,7 @@ function GameServer._loadChunk(gs: GameServer, cx: number, cz: number)
 end
 
 function GameServer._unloadChunk(gs: GameServer, cx: number, cz: number)
+	gs.pendingGen[Coords.chunkKey(cx, cz)] = nil
 	local c = World.getChunk(gs.world, cx, cz)
 	if c == nil then
 		return
@@ -298,7 +335,7 @@ end
 function GameServer.spawnPoint(gs: GameServer): (number, number, number)
 	-- highest non-air block at the origin column (generates it if needed)
 	if not World.isLoaded(gs.world, 0, 0) then
-		GameServer._loadChunk(gs, 0, 0)
+		GameServer._loadChunk(gs, 0, 0, true)
 		if World.isLoaded(gs.world, 0, 0) then
 			ChunkScheduler.markLoaded(gs.scheduler, 0, 0)
 		end

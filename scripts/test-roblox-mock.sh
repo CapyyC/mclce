@@ -14,7 +14,7 @@ for base in ("src",):
     for dp, dn, fn in os.walk(os.path.join(root, base)):
         dn.sort()
         for f in sorted(fn):
-            if f.endswith(".luau"):
+            if f.endswith(".luau") or f.endswith(".meta.json"):
                 p = os.path.join(dp, f)
                 rel = os.path.relpath(p, root).replace(os.sep, "/")
                 src = open(p, encoding="utf-8").read()

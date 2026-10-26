@@ -81,7 +81,7 @@ local function ensureLoaded(gs: GameServer.GameServer, cx: number, cz: number)
 	for dz = -1, 1 do
 		for dx = -1, 1 do
 			if World.chunkInBorder(gs.world, cx + dx, cz + dz) and not World.getChunk(gs.world, cx + dx, cz + dz) then
-				GameServer._loadChunk(gs, cx + dx, cz + dz)
+				GameServer._loadChunk(gs, cx + dx, cz + dz, true)
 				if World.getChunk(gs.world, cx + dx, cz + dz) then
 					ChunkScheduler.markLoaded(gs.scheduler, cx + dx, cz + dz)
 				end

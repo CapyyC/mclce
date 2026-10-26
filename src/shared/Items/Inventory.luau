@@ -6,6 +6,9 @@
 -- can execute untrusted client requests on the server.
 
 local ItemStack = require("./ItemStack")
+local SlotClick = require("./SlotClick")
+
+local ARMOUR_RULES: SlotClick.Rules = { maxPlace = 1 }
 
 export type ItemStack = ItemStack.ItemStack
 export type Inventory = {
@@ -138,50 +141,18 @@ function Inventory.consumeHeld(inv: Inventory, n: number): boolean
 	return true
 end
 
--- Container-style click: left click picks up / places / merges / swaps the
--- whole stack; right click picks up half or places one. Returns success.
+-- Container-style click (see SlotClick): left picks up / places / merges /
+-- swaps; right picks up half / places one. Armour slots hold one item.
 function Inventory.click(inv: Inventory, slot: number, button: string): boolean
-	if not validSlot(slot) or (button ~= "left" and button ~= "right") then
+	if not validSlot(slot) then
 		return false
 	end
-	local s = inv.slots[slot]
-	local c = inv.cursor
-	if slot > Inventory.MAIN and c then
-		-- armour slots take only one item (type checking is the caller's job)
-		if c.count ~= 1 and button == "left" then
-			return false
-		end
+	local rules = if slot > Inventory.MAIN then ARMOUR_RULES else nil
+	local ok, ns, nc = SlotClick.click(inv.slots[slot], inv.cursor, button, rules)
+	if not ok then
+		return false
 	end
-	if c == nil then
-		if s == nil then
-			return false
-		end
-		if button == "left" then
-			inv.cursor, inv.slots[slot] = s, nil
-		else
-			local take = (s.count + 1) // 2
-			inv.cursor = ItemStack.copy(s, take)
-			inv.slots[slot] = if s.count - take > 0 then ItemStack.copy(s, s.count - take) else nil
-		end
-	elseif s == nil then
-		if button == "left" then
-			inv.slots[slot], inv.cursor = c, nil
-		else
-			inv.slots[slot] = ItemStack.copy(c, 1)
-			inv.cursor = if c.count > 1 then ItemStack.copy(c, c.count - 1) else nil
-		end
-	elseif ItemStack.canMerge(s, c) then
-		local max = ItemStack.maxStack(s)
-		local want = if button == "left" then c.count else 1
-		local move = math.min(want, max - s.count)
-		if move <= 0 then
-			return false
-		end
-		inv.slots[slot] = ItemStack.copy(s, s.count + move)
-		inv.cursor = if c.count - move > 0 then ItemStack.copy(c, c.count - move) else nil
-	else
-		inv.slots[slot], inv.cursor = c, s
-	end
+	inv.slots[slot], inv.cursor = ns, nc
 	touch(inv)
 	return true
 end

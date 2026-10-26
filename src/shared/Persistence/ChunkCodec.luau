@@ -2,14 +2,18 @@
 --!native
 -- Versioned binary chunk serialisation shared by networking and saves.
 --
--- v1 layout (little endian):
+-- v2 layout (little endian; v1 = same without block entities):
 --   u8  version (=1)
 --   i32 cx, i32 cz
 --   u16 sectionMask (bit si set = section present)
 --   per present section, ascending si:
 --     varint runCount, then runCount x (varint length, u16 state)
 --     runs cover the 4096 states in section index order (x + z*16 + y*256)
---   varint blockEntityBytes, then that many opaque bytes (reserved; 0 in v1)
+--   v1: varint 0 (reserved)
+--   v2: varint entityCount, per entity:
+--     u16 localIndex (x + z*16 + y*256), str kind, varint slotCount,
+--     slotCount x (u8 slot, u16 id, u8 meta, u8 count, u16 damage),
+--     varint burn, varint burnTotal, varint cook
 -- Unknown block ids are preserved verbatim.
 
 local Chunk = require("../Voxel/Chunk")
@@ -17,7 +21,8 @@ local ByteStream = require("../Util/ByteStream")
 
 local ChunkCodec = {}
 
-ChunkCodec.VERSION = 1
+ChunkCodec.VERSION = 2
+ChunkCodec.MAX_ENTITIES = 4096
 
 function ChunkCodec.encode(chunk: Chunk.Chunk): buffer
 	local w = ByteStream.writer(1024)
@@ -64,7 +69,40 @@ function ChunkCodec.encode(chunk: Chunk.Chunk): buffer
 			ByteStream.u16(w, runState[r])
 		end
 	end
-	ByteStream.varint(w, 0) -- block entities (reserved)
+	-- block entities, sorted by index for deterministic output
+	local bes = chunk.blockEntities
+	local keys: { number } = {}
+	if bes then
+		for k in bes do
+			table.insert(keys, k)
+		end
+		table.sort(keys)
+	end
+	ByteStream.varint(w, #keys)
+	for _, k in keys do
+		local e = (bes :: any)[k]
+		ByteStream.u16(w, k)
+		ByteStream.str(w, e.kind)
+		local slots: { number } = {}
+		for i, st in e.slots do
+			if st then
+				table.insert(slots, i)
+			end
+		end
+		table.sort(slots)
+		ByteStream.varint(w, #slots)
+		for _, i in slots do
+			local st = e.slots[i]
+			ByteStream.u8(w, i)
+			ByteStream.u16(w, st.id)
+			ByteStream.u8(w, st.meta)
+			ByteStream.u8(w, st.count)
+			ByteStream.u16(w, st.damage)
+		end
+		ByteStream.varint(w, e.burn or 0)
+		ByteStream.varint(w, e.burnTotal or 0)
+		ByteStream.varint(w, e.cook or 0)
+	end
 	return ByteStream.finish(w)
 end
 
@@ -72,7 +110,7 @@ end
 function ChunkCodec.decode(b: buffer): Chunk.Chunk
 	local r = ByteStream.reader(b)
 	local version = ByteStream.ru8(r)
-	if version ~= 1 then
+	if version ~= 1 and version ~= 2 then
 		error("unsupported chunk version " .. version, 0)
 	end
 	local cx = ByteStream.ri32(r)
@@ -107,9 +145,39 @@ function ChunkCodec.decode(b: buffer): Chunk.Chunk
 		end
 		Chunk.putSection(chunk, si, states)
 	end
-	local beBytes = ByteStream.rvarint(r)
-	if beBytes > 0 then
-		error("block entities not supported in v1", 0)
+	local n = ByteStream.rvarint(r)
+	if version == 1 and n > 0 then
+		error("v1 chunks carry no block entities", 0)
+	end
+	if n > ChunkCodec.MAX_ENTITIES then
+		error("too many block entities", 0)
+	end
+	for _ = 1, n do
+		local idx = ByteStream.ru16(r)
+		local kind = ByteStream.rstr(r, 32)
+		local slotCount = ByteStream.rvarint(r)
+		if slotCount > 64 then
+			error("too many slots", 0)
+		end
+		local e = { kind = kind, slots = {}, burn = 0, burnTotal = 0, cook = 0, version = 0 }
+		for _ = 1, slotCount do
+			local slot = ByteStream.ru8(r)
+			local id = ByteStream.ru16(r)
+			local meta = ByteStream.ru8(r)
+			local count = ByteStream.ru8(r)
+			local damage = ByteStream.ru16(r)
+			if slot < 1 or count < 1 then
+				error("bad slot", 0)
+			end
+			e.slots[slot] = { id = id, meta = meta, count = count, damage = damage }
+		end
+		e.burn = ByteStream.rvarint(r)
+		e.burnTotal = ByteStream.rvarint(r)
+		e.cook = ByteStream.rvarint(r)
+		if chunk.blockEntities == nil then
+			chunk.blockEntities = {}
+		end
+		(chunk.blockEntities :: any)[idx] = e
 	end
 	Chunk.rebuildHeightmap(chunk)
 	chunk.generated = true

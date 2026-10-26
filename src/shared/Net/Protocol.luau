@@ -25,6 +25,7 @@ Protocol.C2S = {
 	USE_FINISH = 14,
 	JOIN = 15, -- client listener is connected; server may start sending
 	ATTACK = 16, -- mobId
+	CONTAINER_CLICK = 17, -- slot (1..27), button
 }
 
 Protocol.S2C = {
@@ -41,6 +42,7 @@ Protocol.S2C = {
 	RESPAWNED = 12, -- x, y, z
 	MOBS = 13, -- { spawned = {{id,type,x,y,z,yaw,health}}, moved = {{id,x,y,z,yaw}}, removed = {id}, hurt = {id} }
 	EXPLOSION = 14, -- x, y, z, power
+	CONTAINER = 15, -- { x, y, z, state = BlockEntities.snapshot } or false when closed
 	ITEMS = 10, -- { spawned = {{id,x,y,z,item,meta,count}}, moved = {{id,x,y,z}}, removed = {id} }
 }
 
@@ -97,6 +99,10 @@ function Protocol.decodeC2S(kind: any, args: { any }): Message?
 	elseif kind == C.ATTACK then
 		if #args == 1 and isInt(args[1], 1, 2 ^ 31) then
 			return { kind = kind, mob = args[1] }
+		end
+	elseif kind == C.CONTAINER_CLICK then
+		if #args == 2 and isInt(args[1], 1, 27) and (args[2] == "left" or args[2] == "right") then
+			return { kind = kind, slot = args[1], button = args[2] }
 		end
 	elseif kind == C.CHAT then
 		local text = args[1]

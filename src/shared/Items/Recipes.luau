@@ -110,7 +110,7 @@ local smelts: { Smelt } = {
 -- furnace fuel burn time in ticks (classic values)
 local FUEL: { [number]: number } = {
 	[COAL] = 1600, [PLANKS] = 300, [LOG] = 300, [LOG2] = 300, [STICK] = 100,
-	[58] = 300, [54] = 300, [6] = 100, [11] = 20000, [173] = 16000,
+	[58] = 300, [54] = 300, [6] = 100, [327] = 20000, [173] = 16000,
 	[268] = 200, [269] = 200, [270] = 200, [271] = 200, [290] = 200,
 }
 

@@ -102,6 +102,45 @@ UIS.InputEnded:Fire(MB1)
 H.run(0.3)
 check(pig.health < 10, "pig took melee damage (health " .. pig.health .. ")")
 
+print("[mock] open a chest by right-clicking it, move an item in")
+SWorld.setState(gs.world, bx, by, bz + 1, 54 * 16)
+H.run(0.3)
+camera.CFrame = Mock.CFrame.new(eye, Mock.Vector3.new((bx + 0.5) * BS, (by + 0.5) * BS, (bz + 1.2) * BS))
+UIS.InputBegan:Fire(MB2, false)
+H.run(0.1)
+UIS.InputEnded:Fire(MB2)
+H.run(0.5)
+local cgui = player.PlayerGui:FindFirstChild("mclceContainer")
+check(cgui ~= nil and cgui.Enabled == true, "chest screen opened")
+if cgui and cgui.Enabled then
+	-- click the first inventory slot that holds something, then chest slot 1
+	local SBE = H.caches.server["src/shared/Sim/BlockEntities.luau"]
+	local slot
+	for i = 1, 36 do
+		if sp.inventory.slots[i] then
+			slot = i
+			break
+		end
+	end
+	local buttons = {}
+	for _, c in cgui:GetDescendants() do
+		if c.ClassName == "TextButton" then
+			table.insert(buttons, c)
+		end
+	end
+	-- buttons are created in order: 27 container slots, then inventory 1..36
+	buttons[27 + slot].Activated:Fire()
+	H.run(0.2)
+	buttons[1].Activated:Fire()
+	H.run(0.3)
+	local e = SBE.get(gs.world, bx, by, bz + 1)
+	check(e ~= nil and e.slots[1] ~= nil, "item moved into the chest via UI")
+	check(string.find(buttons[1].Text, "") ~= nil and buttons[1].Text ~= "", "chest slot shows the item: " .. buttons[1].Text)
+	UIS.InputBegan:Fire({ UserInputType = Mock.Enum.UserInputType.Keyboard, KeyCode = Mock.Enum.KeyCode.E }, false)
+	H.run(0.3)
+	check(cgui.Enabled == false, "E closes the chest")
+end
+
 print("[mock] open crafting menu")
 UIS.InputBegan:Fire({ UserInputType = Mock.Enum.UserInputType.Keyboard, KeyCode = Mock.Enum.KeyCode.E }, false)
 H.run(0.2)

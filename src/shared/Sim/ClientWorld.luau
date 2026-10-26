@@ -32,6 +32,8 @@ export type ClientWorld = {
 	mobs: { [number]: MobView },
 	mobsChanged: { [number]: boolean },
 	explosions: { { number } },
+	container: { [string]: any }?, -- open container snapshot { x, y, z, state }
+	containerChanged: boolean,
 	clock: number,
 	worldTime: number,
 	chat: { { string } },
@@ -60,6 +62,8 @@ function ClientWorld.new(worldSize: number?): ClientWorld
 		mobs = {},
 		mobsChanged = {},
 		explosions = {},
+		container = nil,
+		containerChanged = false,
 		clock = 0,
 		worldTime = 0,
 		chat = {},
@@ -196,6 +200,9 @@ function ClientWorld.apply(cw: ClientWorld, kind: number, args: { any })
 				cw.mobs[id] = nil
 				cw.mobsChanged[id] = true
 			end
+		elseif kind == S2C.CONTAINER then
+			cw.container = if args[1] == false then nil else args[1]
+			cw.containerChanged = true
 		elseif kind == S2C.EXPLOSION then
 			table.insert(cw.explosions, { args[1], args[2], args[3], args[4] })
 		elseif kind == S2C.TIME then
@@ -271,6 +278,20 @@ function ClientWorld.targetMob(cw: ClientWorld, ox: number, oy: number, oz: numb
 		end
 	end
 	return best, bestT
+end
+
+function ClientWorld.containerClick(cw: ClientWorld, slot: number, button: string)
+	if cw.container then
+		out(cw, C2S.CONTAINER_CLICK, slot, button)
+	end
+end
+
+function ClientWorld.inventoryClick(cw: ClientWorld, slot: number, button: string)
+	out(cw, C2S.INV_CLICK, slot, button)
+end
+
+function ClientWorld.closeContainer(cw: ClientWorld)
+	out(cw, C2S.CLOSE_CONTAINER)
 end
 
 function ClientWorld.attack(cw: ClientWorld, mobId: number)

@@ -31,6 +31,7 @@ local Fluids = require("./Fluids")
 local LightEngine = require("../Voxel/LightEngine")
 local Mobs = require("./Mobs")
 local Time = require("./Time")
+local BlockEntities = require("./BlockEntities")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -54,6 +55,7 @@ export type Player = {
 	sentVitals: string,
 	eating: { tick: number, slot: number }?,
 	knownMobs: { [number]: boolean },
+	open: { x: number, y: number, z: number, version: number }?,
 	lastX: number,
 	lastZ: number,
 }
@@ -86,6 +88,7 @@ export type GameServer = {
 	light: LightEngine.LightEngine,
 	mobs: Mobs.Mobs,
 	mobsEnabled: boolean,
+	furnaces: { [number]: { number } }, -- position key -> {x, y, z}
 	rng: JavaRandom.JavaRandom,
 	tickCount: number,
 	worldTime: number,
@@ -134,6 +137,7 @@ function GameServer.new(opts: Options): GameServer
 		light = LightEngine.new(world),
 		mobs = Mobs.new(seed.lo + 7),
 		mobsEnabled = opts.mobs ~= false,
+		furnaces = {},
 		rng = JavaRandom.new(seed.lo),
 		tickCount = 0,
 		worldTime = 0,
@@ -158,6 +162,7 @@ function GameServer.new(opts: Options): GameServer
 	gs.fluids = Fluids.new(world, 2048)
 	World.addListener(world, function(x, y, z, old, new)
 		LightEngine.onBlockChanged(gs.light, x, y, z, old // 16, new // 16)
+		GameServer._blockEntityChange(gs, x, y, z, old // 16, new // 16)
 		local p = gs.pendingChanges
 		local n = #p
 		p[n + 1], p[n + 2], p[n + 3], p[n + 4] = x, y, z, new
@@ -213,6 +218,15 @@ function GameServer._loadChunk(gs: GameServer, cx: number, cz: number)
 	end
 	World.putChunk(gs.world, chunk :: any)
 	LightEngine.addChunk(gs.light, cx, cz)
+	local bes = (chunk :: any).blockEntities
+	if bes then
+		for idx, e in bes do
+			if e.kind == "furnace" then
+				local x, z, y = cx * 16 + idx % 16, cz * 16 + (idx // 16) % 16, idx // 256
+				gs.furnaces[Fluids.key(x, y, z)] = { x, y, z }
+			end
+		end
+	end
 end
 
 function GameServer._unloadChunk(gs: GameServer, cx: number, cz: number)
@@ -222,6 +236,11 @@ function GameServer._unloadChunk(gs: GameServer, cx: number, cz: number)
 	end
 	if c.dirty and gs.save then
 		SaveManager.storeChunk(gs.save, c)
+	end
+	for k, pos in gs.furnaces do
+		if pos[1] // 16 == cx and pos[3] // 16 == cz then
+			gs.furnaces[k] = nil
+		end
 	end
 	World.removeChunk(gs.world, cx, cz)
 	LightEngine.removeChunk(gs.light, cx, cz)
@@ -477,6 +496,11 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 	if not canEdit(gs, p, tx, ty, tz) then
 		return reject(gs, p, tx, ty, tz)
 	end
+	-- "use" on a container opens it instead of placing
+	if BlockEntities.kindForBlock(World.getId(gs.world, tx, ty, tz)) then
+		GameServer._openContainer(gs, p, tx, ty, tz)
+		return
+	end
 	local held = Inventory.held(p.inventory)
 	local def = if held then ItemRegistry.get(held.id) else nil
 	if held == nil or def == nil or def.block == nil then
@@ -514,6 +538,15 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 		end
 	end
 	local meta = 0
+	if blockId == 61 or blockId == 54 or blockId == 86 then
+		-- face the player: 2 north (-z), 3 south (+z), 4 west (-x), 5 east (+x)
+		local dx, dz = p.x - (x + 0.5), p.z - (z + 0.5)
+		if math.abs(dx) > math.abs(dz) then
+			meta = if dx > 0 then 5 else 4
+		else
+			meta = if dz > 0 then 3 else 2
+		end
+	end
 	if blockId == 17 or blockId == 162 or blockId == 5 or blockId == 35 or blockId == 1 or blockId == 6 or blockId == 18 then
 		meta = held.meta % 16
 	end
@@ -559,7 +592,29 @@ function GameServer.handle(gs: GameServer, id: number, kind: any, args: { any })
 		end
 	elseif k == C2S.INV_QUICK_MOVE then
 		Inventory.quickMove(p.inventory, m.slot)
+	elseif k == C2S.CONTAINER_CLICK then
+		local o = p.open
+		local e = if o then BlockEntities.get(gs.world, o.x, o.y, o.z) else nil
+		if o == nil or e == nil or not inReach(p, o.x, o.y, o.z) then
+			p.rejected += 1
+			return
+		end
+		local ok, cursor = BlockEntities.click(e, m.slot, p.inventory.cursor, m.button)
+		if ok then
+			p.inventory.cursor = cursor
+			p.inventory.version += 1
+			local c = World.getChunk(gs.world, o.x // 16, o.z // 16)
+			if c then
+				c.dirty = true
+			end
+		else
+			p.rejected += 1
+		end
 	elseif k == C2S.CLOSE_CONTAINER then
+		if p.open then
+			p.open = nil
+			send(gs, p.id, S2C.CONTAINER, false)
+		end
 		local left = Inventory.returnCursor(p.inventory)
 		if left > 0 and p.inventory.cursor then
 			ItemEntities.spawn(gs.items, p.x, p.y + 1.3, p.z, p.inventory.cursor)
@@ -712,6 +767,84 @@ function GameServer._tickSurvival(gs: GameServer, p: Player)
 		v.fallStartY = nil
 	end
 	p.lastX, p.lastZ = p.x, p.z
+end
+
+-- Block entities -------------------------------------------------------------
+
+-- Keeps block entities consistent with blocks: created when a container
+-- block appears, contents dropped when it disappears (any cause).
+function GameServer._blockEntityChange(gs: GameServer, x: number, y: number, z: number, oldId: number, newId: number)
+	local oldKind, newKind = BlockEntities.kindForBlock(oldId), BlockEntities.kindForBlock(newId)
+	if oldKind == newKind then
+		return
+	end
+	local key = Fluids.key(x, y, z)
+	if oldKind then
+		local e = BlockEntities.get(gs.world, x, y, z)
+		if e then
+			for _, s in BlockEntities.contents(e) do
+				ItemEntities.spawn(gs.items, x + 0.5, y + 0.5, z + 0.5, s, (gs.rng:nextFloat() - 0.5) * 0.3, 0.2, (gs.rng:nextFloat() - 0.5) * 0.3)
+			end
+			BlockEntities.set(gs.world, x, y, z, nil)
+		end
+		gs.furnaces[key] = nil
+	end
+	if newKind then
+		BlockEntities.set(gs.world, x, y, z, BlockEntities.new(newKind))
+		if newKind == "furnace" then
+			gs.furnaces[key] = { x, y, z }
+		end
+	end
+end
+
+function GameServer._openContainer(gs: GameServer, p: Player, x: number, y: number, z: number): boolean
+	local e = BlockEntities.get(gs.world, x, y, z)
+	if e == nil then
+		return false
+	end
+	p.open = { x = x, y = y, z = z, version = -1 }
+	return true
+end
+
+local function containerTick(gs: GameServer, p: Player)
+	local o = p.open
+	if o == nil then
+		return
+	end
+	local e = BlockEntities.get(gs.world, o.x, o.y, o.z)
+	if e == nil or not inReach(p, o.x, o.y, o.z) or p.vitals.dead then
+		p.open = nil
+		Inventory.returnCursor(p.inventory)
+		send(gs, p.id, S2C.CONTAINER, false)
+		return
+	end
+	if e.version ~= o.version then
+		o.version = e.version
+		send(gs, p.id, S2C.CONTAINER, { x = o.x, y = o.y, z = o.z, state = BlockEntities.snapshot(e) })
+	end
+end
+
+function GameServer._tickFurnaces(gs: GameServer)
+	for k, pos in gs.furnaces do
+		local x, y, z = pos[1], pos[2], pos[3]
+		local e = BlockEntities.get(gs.world, x, y, z)
+		if e == nil then
+			gs.furnaces[k] = nil
+			continue
+		end
+		local changed, lit = BlockEntities.tickFurnace(e)
+		if changed then
+			local st = World.getState(gs.world, x, y, z)
+			local want = if lit then BlockEntities.LIT_FURNACE else BlockEntities.FURNACE
+			if st // 16 ~= want then
+				World.setState(gs.world, x, y, z, want * 16 + st % 16)
+			end
+			local c = World.getChunk(gs.world, x // 16, z // 16)
+			if c then
+				c.dirty = true
+			end
+		end
+	end
 end
 
 -- Mobs & combat -------------------------------------------------------------
@@ -951,8 +1084,9 @@ function GameServer.tick(gs: GameServer)
 	if gs.tickCount % 20 == 0 and #viewers > 0 then
 		ChunkScheduler.collect(gs.scheduler)
 	end
-	-- fluids
+	-- fluids, furnaces
 	Fluids.step(gs.fluids)
+	GameServer._tickFurnaces(gs)
 	-- mobs
 	local mctx = GameServer._mobContext(gs)
 	Mobs.tick(gs.mobs, mctx)
@@ -992,6 +1126,7 @@ function GameServer.tick(gs: GameServer)
 		end
 		replicateChunks(gs, p)
 		replicateMobs(gs, p, mev)
+		containerTick(gs, p)
 		if #changes > 0 then
 			local mine: { number } = {}
 			for i = 1, #changes, 4 do

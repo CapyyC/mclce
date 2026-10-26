@@ -276,7 +276,7 @@ Mock.Signal = Signal
 local Instance = {}
 local EVENTS = {
 	RemoteEvent = { "OnServerEvent", "OnClientEvent" },
-	TextButton = { "Activated", "MouseButton1Click" },
+	TextButton = { "Activated", "MouseButton1Click", "MouseButton2Click", "MouseButton1Down", "MouseButton1Up" },
 	Player = { "CharacterAdded", "CharacterRemoving" },
 }
 local DEFAULTS = {

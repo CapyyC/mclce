@@ -87,6 +87,28 @@ return function(t)
 			Chunk.setState(c, 0, 255, 0, 65535)
 			same(t, c, ChunkCodec.decode(ChunkCodec.encode(c)))
 		end)
+		t.test("v2 block entities round-trip; v1 data still decodes", function()
+			local c = Chunk.new(2, -3)
+			Chunk.setState(c, 4, 64, 5, 54 * 16)
+			c.blockEntities = {
+				[4 + 5 * 16 + 64 * 256] = { kind = "chest", slots = { [1] = { id = 3, meta = 0, count = 64, damage = 0 }, [27] = { id = 257, meta = 0, count = 1, damage = 100 } }, burn = 0, burnTotal = 0, cook = 0, version = 3 },
+				[0] = { kind = "furnace", slots = { [2] = { id = 263, meta = 1, count = 5, damage = 0 } }, burn = 1200, burnTotal = 1600, cook = 77, version = 0 },
+			}
+			local d = ChunkCodec.decode(ChunkCodec.encode(c))
+			local ch = d.blockEntities[4 + 5 * 16 + 64 * 256]
+			t.eq(ch.kind, "chest"); t.eq(ch.slots[1].count, 64); t.eq(ch.slots[27].damage, 100)
+			local f = d.blockEntities[0]
+			t.eq(f.kind, "furnace"); t.eq(f.burn, 1200); t.eq(f.cook, 77); t.eq(f.slots[2].meta, 1)
+			-- hand-built v1 payload: empty chunk
+			local v1 = buffer.create(12)
+			buffer.writeu8(v1, 0, 1)
+			buffer.writei32(v1, 1, 7)
+			buffer.writei32(v1, 5, -7)
+			buffer.writeu16(v1, 9, 0)
+			buffer.writeu8(v1, 11, 0)
+			local o = ChunkCodec.decode(v1)
+			t.eq(o.cx, 7); t.eq(o.cz, -7); t.eq(o.blockEntities, nil)
+		end)
 		t.test("corrupted or truncated data raises instead of producing garbage", function()
 			local c = WorldGenerator.generate(WorldGenerator.new(WorldSeed.fromNumber(3)), 0, 0)
 			local b = ChunkCodec.encode(c)

@@ -25,6 +25,9 @@ export type Chunk = {
 	-- Persistence bookkeeping.
 	dirty: boolean,
 	generated: boolean,
+	-- Block entities (chests, furnaces) by local index x + z*16 + y*256;
+	-- nil until the first one is created. Opaque to the voxel layer.
+	blockEntities: { [number]: any }?,
 }
 
 local Chunk = {}
@@ -42,6 +45,7 @@ function Chunk.new(cx: number, cz: number): Chunk
 		heightmap = buffer.create(512),
 		dirty = false,
 		generated = false,
+		blockEntities = nil,
 	}
 end
 

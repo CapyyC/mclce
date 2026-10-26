@@ -18,6 +18,7 @@ local Hud = require(script.Parent.Hud)
 local Input = require(script.Parent.Input)
 local CraftingMenu = require(script.Parent.CraftingMenu)
 local MobRenderer = require(script.Parent.MobRenderer)
+local ContainerMenu = require(script.Parent.ContainerMenu)
 
 local BS = Config.BLOCK_SIZE
 local C2S_KIND, S2C_KIND = Protocol.C2S, Protocol.S2C
@@ -38,6 +39,11 @@ local hud = Hud.new(player:WaitForChild("PlayerGui"))
 local crafting = CraftingMenu.new(player.PlayerGui, function(recipeId, grid)
 	table.insert(cw.outgoing, { C2S_KIND.CRAFT, recipeId, grid })
 end)
+local containerMenu = ContainerMenu.new(player.PlayerGui, function(slot, button)
+	ClientWorld.containerClick(cw, slot, button)
+end, function(slot, button)
+	ClientWorld.inventoryClick(cw, slot, button)
+end)
 Input.start()
 hud.respawnButton.Activated:Connect(function()
 	ClientWorld.requestRespawn(cw)
@@ -49,6 +55,9 @@ S2C.OnClientEvent:Connect(function(kind, ...)
 		renderer:dropChunk(...)
 	elseif kind == S2C_KIND.INVENTORY and crafting:isOpen() then
 		crafting:refresh(cw.inventory, crafting.grid)
+	end
+	if kind == S2C_KIND.CONTAINER or (kind == S2C_KIND.INVENTORY and cw.container) then
+		containerMenu:render(cw.container, cw.inventory)
 	end
 end)
 
@@ -154,6 +163,11 @@ RunService.RenderStepped:Connect(function(dt)
 		inv.selected = sel
 		table.insert(cw.outgoing, { C2S_KIND.SELECT_SLOT, sel })
 	end
+	if a.openInventory and cw.container then
+		-- E closes an open container
+		a.openInventory = false
+		ClientWorld.closeContainer(cw)
+	end
 	if a.openInventory then
 		a.openInventory = false
 		local open = not crafting:isOpen()
@@ -169,7 +183,8 @@ RunService.RenderStepped:Connect(function(dt)
 	-- targeting
 	local reach = if cw.gamemode == "creative" then Config.REACH_CREATIVE else Config.REACH_SURVIVAL
 	local look = cam.CFrame.LookVector
-	local hit = if crafting:isOpen() then nil else ClientWorld.target(cw, camPos.X, camPos.Y, camPos.Z, look.X, look.Y, look.Z, reach)
+	local menuOpen = crafting:isOpen() or containerMenu:isOpen()
+	local hit = if menuOpen then nil else ClientWorld.target(cw, camPos.X, camPos.Y, camPos.Z, look.X, look.Y, look.Z, reach)
 	if hit then
 		selPart.CFrame = CFrame.new((hit.x + 0.5) * BS, (hit.y + 0.5) * BS, (hit.z + 0.5) * BS)
 		selBox.Visible = true

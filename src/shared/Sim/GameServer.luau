@@ -28,6 +28,7 @@ local JavaRandom = require("../Util/JavaRandom")
 local Faces = require("../Mesh/Faces")
 local Survival = require("./Survival")
 local Fluids = require("./Fluids")
+local LightEngine = require("../Voxel/LightEngine")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -78,6 +79,7 @@ export type GameServer = {
 	pendingChanges: { number }, -- flat x, y, z, state
 	items: ItemEntities.ItemEntities,
 	fluids: Fluids.Fluids,
+	light: LightEngine.LightEngine,
 	rng: JavaRandom.JavaRandom,
 	tickCount: number,
 	worldTime: number,
@@ -123,6 +125,7 @@ function GameServer.new(opts: Options): GameServer
 		pendingChanges = {},
 		items = ItemEntities.new(),
 		fluids = nil :: any,
+		light = LightEngine.new(world),
 		rng = JavaRandom.new(seed.lo),
 		tickCount = 0,
 		worldTime = 0,
@@ -145,7 +148,8 @@ function GameServer.new(opts: Options): GameServer
 		end,
 	}, gs.viewRadius + 1, { hysteresis = 2, maxLoaded = Config.MAX_LOADED_CHUNKS })
 	gs.fluids = Fluids.new(world, 2048)
-	World.addListener(world, function(x, y, z, _old, new)
+	World.addListener(world, function(x, y, z, old, new)
+		LightEngine.onBlockChanged(gs.light, x, y, z, old // 16, new // 16)
 		local p = gs.pendingChanges
 		local n = #p
 		p[n + 1], p[n + 2], p[n + 3], p[n + 4] = x, y, z, new
@@ -200,6 +204,7 @@ function GameServer._loadChunk(gs: GameServer, cx: number, cz: number)
 		count(gs, "loadedFromSave")
 	end
 	World.putChunk(gs.world, chunk :: any)
+	LightEngine.addChunk(gs.light, cx, cz)
 end
 
 function GameServer._unloadChunk(gs: GameServer, cx: number, cz: number)
@@ -211,6 +216,7 @@ function GameServer._unloadChunk(gs: GameServer, cx: number, cz: number)
 		SaveManager.storeChunk(gs.save, c)
 	end
 	World.removeChunk(gs.world, cx, cz)
+	LightEngine.removeChunk(gs.light, cx, cz)
 	count(gs, "unloaded")
 end
 

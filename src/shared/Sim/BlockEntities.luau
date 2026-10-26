@@ -26,19 +26,32 @@ BlockEntities.CHEST = 54
 BlockEntities.FURNACE = 61
 BlockEntities.LIT_FURNACE = 62
 BlockEntities.COOK_TICKS = 200
-BlockEntities.SIZES = { chest = 27, furnace = 3 } -- furnace: 1 input, 2 fuel, 3 output
+BlockEntities.SIZES = { chest = 27, furnace = 3, spawner = 0 } -- furnace: 1 input, 2 fuel, 3 output
 
 function BlockEntities.kindForBlock(id: number): string?
 	if id == 54 then
 		return "chest"
 	elseif id == 61 or id == 62 then
 		return "furnace"
+	elseif id == 52 then
+		return "spawner"
 	end
 	return nil
 end
 
 function BlockEntities.new(kind: string): Entity
-	return { kind = kind, slots = {}, burn = 0, burnTotal = 0, cook = 0, version = 0 }
+	if kind == "spawner" then
+		kind = "spawner:pig" -- a placed spawner without data (creative) spawns pigs
+	end
+	return { kind = kind, slots = {}, burn = 0, burnTotal = 0, cook = 20, version = 0 }
+end
+
+function BlockEntities.isSpawner(e: Entity): boolean
+	return string.sub(e.kind, 1, 8) == "spawner:"
+end
+
+function BlockEntities.spawnerMob(e: Entity): string
+	return string.sub(e.kind, 9)
 end
 
 local function localIndex(x: number, y: number, z: number): number

@@ -139,6 +139,25 @@ return function(t)
 			t.truthy(p.vitals.health < 20)
 			t.eq(World.getId(gs.world, 0, 0, 0), B.BEDROCK)
 		end)
+		t.test("a dungeon spawner spawns its mob near players", function()
+			local gs = setup()
+			local BlockEntities = require("../../src/shared/Sim/BlockEntities")
+			World.setState(gs.world, 3, 81, 3, 52 * 16)
+			local e = BlockEntities.get(gs.world, 3, 81, 3)
+			e.kind = "spawner:skeleton"
+			e.cook = 5
+			for _ = 1, 10 do
+				GameServer.tick(gs)
+			end
+			local skeletons = 0
+			for _, m in gs.mobs.list do
+				if m.kind.name == "skeleton" then
+					skeletons += 1
+				end
+			end
+			t.truthy(skeletons >= 1, "spawned " .. skeletons)
+			t.truthy(e.cook >= 190, "delay reset")
+		end)
 		t.test("hostiles spawn in the dark around players when enabled", function()
 			local gs = GameServer.new({ seed = "mobs", viewRadius = 3, genBudget = 50, sendBudget = 50 })
 			GameServer.addPlayer(gs, 1, "a")

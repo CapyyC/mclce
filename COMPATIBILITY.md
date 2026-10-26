@@ -19,6 +19,8 @@ Console / classic numeric-ID Minecraft (wiki-level facts), never code.
 | Caves | INF | Worm carver model, own constants; lava below y=11 like classic. |
 | Ore distribution | RS | Classic counts/sizes/heights (coal 20x17 0–128, iron 20x9 0–64, gold 2x9 0–32, redstone 8x8 0–16, diamond 1x8 0–16, lapis triangular ~16). |
 | Trees / plants | INF | Simplified oak/birch/spruce/jungle/acacia shapes. |
+| Dungeons (8 attempts/chunk, 1–5 openings, spawner, 2 loot chests) | INF, PART | Classic rules; rarer than classic because our caves are sparser. Loot table subset. |
+| Mob spawners (16-block activation, 200–799 t delay, ≤4 per cycle, cap 6) | RS | No light check. |
 | Structures (villages, temples, strongholds, mineshafts) | NI | |
 | Crafting UI model (recipe list by category, no grid) | RS, PART | LCE crafting screen behaviour; categories simplified; ~45 recipes. |
 | Smelting / fuel values | RS, PART | Logic for furnace block entity NI. |

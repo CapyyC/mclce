@@ -18,6 +18,7 @@ local Biomes = require("./Biomes")
 local Hash = require("../Util/Hash")
 local JavaRandom = require("../Util/JavaRandom")
 local TerrainGenerator = require("./TerrainGenerator")
+local Dungeons = require("./Dungeons")
 
 export type BaseChunk = TerrainGenerator.BaseChunk
 export type GetBase = (cx: number, cz: number) -> BaseChunk
@@ -347,6 +348,16 @@ end
 -- Decorates `target` (a copy of its base terrain) using the 3x3 neighbourhood.
 function Decorator.decorate(seed: { hi: number, lo: number }, target: Chunk.Chunk, getBase: GetBase)
 	local sink: Sink = { chunk = target, bx = target.cx * 16, bz = target.cz * 16 }
+	-- dungeons first (underground), then ores/trees/plants per source chunk.
+	-- Room validity needs base terrain up to 1 chunk around the source, so
+	-- rooms are evaluated with the caching getBase.
+	for dz = -1, 1 do
+		for dx = -1, 1 do
+			for _, room in Dungeons.rooms(seed, target.cx + dx, target.cz + dz, getBase) do
+				Dungeons.apply(room, target, getBase)
+			end
+		end
+	end
 	for dz = -1, 1 do
 		for dx = -1, 1 do
 			local sx, sz = target.cx + dx, target.cz + dz

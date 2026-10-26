@@ -30,6 +30,7 @@ local Survival = require("./Survival")
 local Fluids = require("./Fluids")
 local LightEngine = require("../Voxel/LightEngine")
 local Mobs = require("./Mobs")
+local MobTypes = require("./MobTypes")
 local Time = require("./Time")
 local BlockEntities = require("./BlockEntities")
 local BlockUpdates = require("./BlockUpdates")
@@ -91,6 +92,7 @@ export type GameServer = {
 	mobs: Mobs.Mobs,
 	mobsEnabled: boolean,
 	furnaces: { [number]: { number } }, -- position key -> {x, y, z}
+	spawners: { [number]: { number } },
 	updates: BlockUpdates.BlockUpdates,
 	redstone: Redstone.Redstone,
 	plates: { [number]: { number } },
@@ -144,6 +146,7 @@ function GameServer.new(opts: Options): GameServer
 		mobs = Mobs.new(seed.lo + 7),
 		mobsEnabled = opts.mobs ~= false,
 		furnaces = {},
+		spawners = {},
 		updates = nil :: any,
 		redstone = Redstone.new(world),
 		plates = {},
@@ -251,9 +254,11 @@ function GameServer._loadChunk(gs: GameServer, cx: number, cz: number)
 	local bes = (chunk :: any).blockEntities
 	if bes then
 		for idx, e in bes do
+			local x, z, y = cx * 16 + idx % 16, cz * 16 + (idx // 16) % 16, idx // 256
 			if e.kind == "furnace" then
-				local x, z, y = cx * 16 + idx % 16, cz * 16 + (idx // 16) % 16, idx // 256
 				gs.furnaces[Fluids.key(x, y, z)] = { x, y, z }
+			elseif BlockEntities.isSpawner(e) then
+				gs.spawners[Fluids.key(x, y, z)] = { x, y, z }
 			end
 		end
 	end
@@ -267,9 +272,11 @@ function GameServer._unloadChunk(gs: GameServer, cx: number, cz: number)
 	if c.dirty and gs.save then
 		SaveManager.storeChunk(gs.save, c)
 	end
-	for k, pos in gs.furnaces do
-		if pos[1] // 16 == cx and pos[3] // 16 == cz then
-			gs.furnaces[k] = nil
+	for _, set in { gs.furnaces, gs.spawners } do
+		for k, pos in set do
+			if pos[1] // 16 == cx and pos[3] // 16 == cz then
+				set[k] = nil
+			end
 		end
 	end
 	World.removeChunk(gs.world, cx, cz)
@@ -604,7 +611,8 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 		return reject(gs, p, tx, ty, tz)
 	end
 	-- "use" on a container opens it instead of placing
-	if BlockEntities.kindForBlock(World.getId(gs.world, tx, ty, tz)) then
+	local useKind = BlockEntities.kindForBlock(World.getId(gs.world, tx, ty, tz))
+	if useKind == "chest" or useKind == "furnace" then
 		GameServer._openContainer(gs, p, tx, ty, tz)
 		return
 	end
@@ -945,11 +953,14 @@ function GameServer._blockEntityChange(gs: GameServer, x: number, y: number, z: 
 			BlockEntities.set(gs.world, x, y, z, nil)
 		end
 		gs.furnaces[key] = nil
+		gs.spawners[key] = nil
 	end
 	if newKind then
 		BlockEntities.set(gs.world, x, y, z, BlockEntities.new(newKind))
 		if newKind == "furnace" then
 			gs.furnaces[key] = { x, y, z }
+		elseif newKind == "spawner" then
+			gs.spawners[key] = { x, y, z }
 		end
 	end
 end
@@ -1000,6 +1011,62 @@ function GameServer._tickFurnaces(gs: GameServer)
 			if c then
 				c.dirty = true
 			end
+		end
+	end
+end
+
+-- Mob spawners (classic: active within 16 blocks of a player, 200..799 tick
+-- delay, up to 4 mobs per cycle within 4 blocks, at most 6 nearby).
+function GameServer._tickSpawners(gs: GameServer)
+	for k, pos in gs.spawners do
+		local x, y, z = pos[1], pos[2], pos[3]
+		local e = BlockEntities.get(gs.world, x, y, z)
+		if e == nil or not BlockEntities.isSpawner(e) then
+			gs.spawners[k] = nil
+			continue
+		end
+		local active = false
+		for _, p in gs.players do
+			local dx, dy, dz = p.x - x - 0.5, p.y - y, p.z - z - 0.5
+			if dx * dx + dy * dy + dz * dz <= 256 then
+				active = true
+				break
+			end
+		end
+		if not active then
+			continue
+		end
+		e.cook -= 1
+		if e.cook > 0 then
+			continue
+		end
+		local rng = gs.rng
+		e.cook = 200 + rng:nextInt(600)
+		local okKind, kind = pcall(MobTypes.byName, BlockEntities.spawnerMob(e))
+		if not okKind then
+			continue
+		end
+		local nearby = 0
+		for _, m in gs.mobs.list do
+			if m.kind == kind and math.abs(m.x - x) <= 8 and math.abs(m.y - y) <= 4 and math.abs(m.z - z) <= 8 then
+				nearby += 1
+			end
+		end
+		for _ = 1, 4 do
+			if nearby >= 6 then
+				break
+			end
+			local sx = x + rng:nextInt(9) - 4
+			local sy = y + rng:nextInt(3) - 1
+			local sz = z + rng:nextInt(9) - 4
+			if World.getId(gs.world, sx, sy, sz) == 0 and World.getId(gs.world, sx, sy + 1, sz) == 0 and BlockRegistry.isSolid(World.getId(gs.world, sx, sy - 1, sz)) then
+				Mobs.spawn(gs.mobs, kind, sx + 0.5, sy, sz + 0.5)
+				nearby += 1
+			end
+		end
+		local c = World.getChunk(gs.world, x // 16, z // 16)
+		if c then
+			c.dirty = true
 		end
 	end
 end
@@ -1292,6 +1359,7 @@ function GameServer.tick(gs: GameServer)
 	-- fluids, furnaces
 	Fluids.step(gs.fluids)
 	GameServer._tickFurnaces(gs)
+	GameServer._tickSpawners(gs)
 	-- mobs
 	local mctx = GameServer._mobContext(gs)
 	Mobs.tick(gs.mobs, mctx)

@@ -10,6 +10,7 @@ local Input = {}
 
 Input.actions = {
 	breakHeld = false,
+	breakPressed = false, -- edge-triggered, consumed (attacks)
 	placePressed = false, -- edge-triggered, consumed by the client loop
 	placeHeld = false,
 	hotbarDelta = 0, -- consumed
@@ -32,6 +33,7 @@ function Input.start()
 		local t, k = io.UserInputType, io.KeyCode
 		if t == Enum.UserInputType.MouseButton1 or k == Enum.KeyCode.ButtonR2 then
 			a.breakHeld = true
+			a.breakPressed = true
 		elseif t == Enum.UserInputType.MouseButton2 or k == Enum.KeyCode.ButtonL2 then
 			a.placePressed = true
 			a.placeHeld = true

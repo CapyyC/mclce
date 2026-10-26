@@ -17,6 +17,7 @@ local ChunkRenderer = require(script.Parent.ChunkRenderer)
 local Hud = require(script.Parent.Hud)
 local Input = require(script.Parent.Input)
 local CraftingMenu = require(script.Parent.CraftingMenu)
+local MobRenderer = require(script.Parent.MobRenderer)
 
 local BS = Config.BLOCK_SIZE
 local C2S_KIND, S2C_KIND = Protocol.C2S, Protocol.S2C
@@ -32,6 +33,7 @@ local cw = ClientWorld.new()
 _G.mclceClient = { cw = cw }
 local renderer = ChunkRenderer.new(cw, workspace)
 _G.mclceClient.renderer = renderer
+local mobRenderer = MobRenderer.new(cw, workspace)
 local hud = Hud.new(player:WaitForChild("PlayerGui"))
 local crafting = CraftingMenu.new(player.PlayerGui, function(recipeId, grid)
 	table.insert(cw.outgoing, { C2S_KIND.CRAFT, recipeId, grid })
@@ -175,6 +177,13 @@ RunService.RenderStepped:Connect(function(dt)
 		selBox.Visible = false
 	end
 	local onGround = hum ~= nil and hum.FloorMaterial ~= Enum.Material.Air
+	-- melee: a click on a mob closer than the targeted block attacks it
+	local mob, mobDist = ClientWorld.targetMob(cw, camPos.X, camPos.Y, camPos.Z, look.X, look.Y, look.Z, 3)
+	if a.breakPressed and mob and (hit == nil or mobDist < hit.distance) and not crafting:isOpen() then
+		ClientWorld.attack(cw, mob.id)
+		a.breakHeld = false
+	end
+	a.breakPressed = false
 	if a.breakHeld and hit then
 		ClientWorld.updateBreaking(cw, hit.x, hit.y, hit.z, dt, onGround, false)
 	else
@@ -195,6 +204,18 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	renderItems()
+	cw.clock += dt
+	mobRenderer:update()
+	mobRenderer:endFrame()
+	for _, e in cw.explosions do
+		local ex = Instance.new("Explosion")
+		ex.Position = Vector3.new(e[1] * BS, e[2] * BS, e[3] * BS)
+		ex.BlastRadius = e[4] * BS
+		ex.BlastPressure = 0 -- visual only; damage is server-authoritative
+		ex.DestroyJointRadiusPercent = 0
+		ex.Parent = workspace
+	end
+	table.clear(cw.explosions)
 	-- Legacy/Java time: tick 0 = 06:00; advance locally between server syncs
 	cw.worldTime = (cw.worldTime + dt * Config.TICK_RATE) % 24000
 	Lighting.ClockTime = (cw.worldTime / 1000 + 6) % 24

@@ -24,6 +24,7 @@ Protocol.C2S = {
 	USE_START = 13, -- begin using held item (eating)
 	USE_FINISH = 14,
 	JOIN = 15, -- client listener is connected; server may start sending
+	ATTACK = 16, -- mobId
 }
 
 Protocol.S2C = {
@@ -38,6 +39,8 @@ Protocol.S2C = {
 	CHAT = 9, -- name, text
 	DIED = 11, -- cause
 	RESPAWNED = 12, -- x, y, z
+	MOBS = 13, -- { spawned = {{id,type,x,y,z,yaw,health}}, moved = {{id,x,y,z,yaw}}, removed = {id}, hurt = {id} }
+	EXPLOSION = 14, -- x, y, z, power
 	ITEMS = 10, -- { spawned = {{id,x,y,z,item,meta,count}}, moved = {{id,x,y,z}}, removed = {id} }
 }
 
@@ -90,6 +93,10 @@ function Protocol.decodeC2S(kind: any, args: { any }): Message?
 	elseif kind == C.CRAFT then
 		if #args == 2 and isInt(args[1], 1, 100000) and (args[2] == 2 or args[2] == 3) then
 			return { kind = kind, recipe = args[1], grid = args[2] }
+		end
+	elseif kind == C.ATTACK then
+		if #args == 1 and isInt(args[1], 1, 2 ^ 31) then
+			return { kind = kind, mob = args[1] }
 		end
 	elseif kind == C.CHAT then
 		local text = args[1]

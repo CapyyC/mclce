@@ -15,6 +15,9 @@ local function newServer(opts)
 	opts.viewRadius = opts.viewRadius or 2
 	opts.genBudget = opts.genBudget or 50
 	opts.sendBudget = opts.sendBudget or 50
+	if opts.mobs == nil then
+		opts.mobs = false
+	end
 	return GameServer.new(opts)
 end
 

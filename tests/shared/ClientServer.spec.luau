@@ -22,7 +22,7 @@ end
 return function(t)
 	t.describe("Client/Server integration", function()
 		t.test("client replica converges with the server and predicts breaks", function()
-			local gs = GameServer.new({ seed = "integration", viewRadius = 2, genBudget = 50, sendBudget = 50 })
+			local gs = GameServer.new({ seed = "integration", viewRadius = 2, genBudget = 50, sendBudget = 50, mobs = false })
 			local p = GameServer.addPlayer(gs, 1, "a")
 			local cw = ClientWorld.new()
 			local clients = { [1] = cw }
@@ -70,7 +70,7 @@ return function(t)
 			t.eq(slotCount, 1, "client inventory mirrors server")
 		end)
 		t.test("rejected prediction is rolled back", function()
-			local gs = GameServer.new({ seed = "integration", viewRadius = 1, genBudget = 50, sendBudget = 50 })
+			local gs = GameServer.new({ seed = "integration", viewRadius = 1, genBudget = 50, sendBudget = 50, mobs = false })
 			GameServer.addPlayer(gs, 1, "a")
 			local cw = ClientWorld.new()
 			local clients = { [1] = cw }
@@ -94,7 +94,7 @@ return function(t)
 			t.truthy((cw.stats.rollbacks or 0) >= 1)
 		end)
 		t.test("death, respawn and eating round-trip", function()
-			local gs = GameServer.new({ seed = "integration", viewRadius = 1, genBudget = 50, sendBudget = 50 })
+			local gs = GameServer.new({ seed = "integration", viewRadius = 1, genBudget = 50, sendBudget = 50, mobs = false })
 			local p = GameServer.addPlayer(gs, 1, "a")
 			local cw = ClientWorld.new()
 			local clients = { [1] = cw }
@@ -115,6 +115,41 @@ return function(t)
 			end
 			t.eq(p.vitals.food, 15)
 			t.eq(cw.vitals.food, 15)
+		end)
+		t.test("client sees mobs and can attack them through the server", function()
+			local Mobs = require("../../src/shared/Sim/Mobs")
+			local MobTypes = require("../../src/shared/Sim/MobTypes")
+			local gs = GameServer.new({ seed = "integration", viewRadius = 2, genBudget = 50, sendBudget = 50, mobs = false })
+			local p = GameServer.addPlayer(gs, 1, "a")
+			local cw = ClientWorld.new()
+			local clients = { [1] = cw }
+			for _ = 1, 3 do
+				pump(gs, clients)
+			end
+			for x = -4, 4 do
+				for z = -4, 4 do
+					World.setState(gs.world, x, 90, z, B.STONE * 16)
+					for y = 91, 95 do
+						World.setState(gs.world, x, y, z, 0)
+					end
+				end
+			end
+			GameServer.teleport(gs, 1, 0.5, 91, 0.5)
+			local cow = Mobs.spawn(gs.mobs, MobTypes.byName("cow"), 2.5, 91, 0.5)
+			pump(gs, clients)
+			t.truthy(cw.mobs[cow.id], "client knows the cow")
+			-- aim from the eye toward the cow
+			local m, dist = ClientWorld.targetMob(cw, 0.5, 92.62, 0.5, 2, -0.5, 0, 4)
+			t.truthy(m ~= nil and m.id == cow.id, "ray hits cow")
+			t.truthy(dist < 3)
+			local miss = ClientWorld.targetMob(cw, 0.5, 92.62, 0.5, -1, 0, 0, 4)
+			t.eq(miss, nil)
+			ClientWorld.attack(cw, cow.id)
+			pump(gs, clients)
+			t.eq(cow.health, 9)
+			pump(gs, clients) -- hurt event reaches the client on the next tick
+			t.truthy(cw.mobs[cow.id].hurtAt >= 0, "client saw the hurt flash")
+			local _ = p
 		end)
 		t.test("malformed server payloads don't crash the client", function()
 			local cw = ClientWorld.new()

@@ -96,6 +96,11 @@ add({ id = 363, name = "beef", maxStack = 64, food = 3, saturation = 0.3 })
 add({ id = 364, name = "cooked_beef", maxStack = 64, food = 8, saturation = 0.8 })
 add({ id = 367, name = "rotten_flesh", maxStack = 64, food = 4, saturation = 0.1 })
 add({ id = 388, name = "emerald", maxStack = 64 })
+add({ id = 262, name = "arrow", maxStack = 64 })
+add({ id = 287, name = "string", maxStack = 64 })
+add({ id = 288, name = "feather", maxStack = 64 })
+add({ id = 289, name = "gunpowder", maxStack = 64 })
+add({ id = 352, name = "bone", maxStack = 64 })
 
 function ItemRegistry.get(id: number): ItemDef?
 	return byId[id]

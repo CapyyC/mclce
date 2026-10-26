@@ -82,6 +82,26 @@ H.run(0.5)
 check(SWorld.getId(gs.world, bx + 1, by, bz) == 4, "placed cobblestone on the neighbour's top face")
 check(player.PlayerGui.mclceHud.Debug.Text ~= "", "HUD debug text: " .. player.PlayerGui.mclceHud.Debug.Text)
 
+print("[mock] a pig appears; click it")
+local SMobs = H.caches.server["src/shared/Sim/Mobs.luau"]
+local SMobTypes = H.caches.server["src/shared/Sim/MobTypes.luau"]
+for dx = -3, -1 do
+	SWorld.setState(gs.world, bx + dx, by - 1, bz, 1 * 16)
+	SWorld.setState(gs.world, bx + dx, by, bz, 0) -- no tall grass in the line of sight
+	SWorld.setState(gs.world, bx + dx, by + 1, bz, 0)
+end
+local pig = SMobs.spawn(gs.mobs, SMobTypes.byName("pig"), bx - 1.5, by, bz + 0.5)
+pig.wanderTicks = 100000
+H.run(0.5)
+local mobsFolder = ws:FindFirstChild("mclceMobs")
+check(mobsFolder ~= nil and #mobsFolder:GetChildren() >= 1, "mob rendered on the client")
+camera.CFrame = Mock.CFrame.new(eye, Mock.Vector3.new(pig.x * BS, (pig.y + 0.45) * BS, pig.z * BS))
+UIS.InputBegan:Fire(MB1, false)
+H.run(0.1)
+UIS.InputEnded:Fire(MB1)
+H.run(0.3)
+check(pig.health < 10, "pig took melee damage (health " .. pig.health .. ")")
+
 print("[mock] open crafting menu")
 UIS.InputBegan:Fire({ UserInputType = Mock.Enum.UserInputType.Keyboard, KeyCode = Mock.Enum.KeyCode.E }, false)
 H.run(0.2)

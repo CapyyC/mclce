@@ -14,8 +14,11 @@ local ItemStack = require("../Items/ItemStack")
 local BlockRegistry = require("../Blocks/BlockRegistry")
 local VoxelRaycast = require("../Physics/VoxelRaycast")
 local ItemRegistry = require("../Items/ItemRegistry")
+local MobTypes = require("./MobTypes")
 
 local S2C, C2S = Protocol.S2C, Protocol.C2S
+
+export type MobView = { id: number, type: number, x: number, y: number, z: number, yaw: number, health: number, hurtAt: number }
 
 export type ItemView = { id: number, x: number, y: number, z: number, item: number, meta: number, count: number }
 
@@ -26,6 +29,10 @@ export type ClientWorld = {
 	inventory: { slots: { [number]: ItemStack.ItemStack }, selected: number, cursor: ItemStack.ItemStack? },
 	items: { [number]: ItemView },
 	itemsChanged: { [number]: boolean },
+	mobs: { [number]: MobView },
+	mobsChanged: { [number]: boolean },
+	explosions: { { number } },
+	clock: number,
 	worldTime: number,
 	chat: { { string } },
 	gamemode: string,
@@ -50,6 +57,10 @@ function ClientWorld.new(worldSize: number?): ClientWorld
 		inventory = { slots = {}, selected = 1, cursor = nil },
 		items = {},
 		itemsChanged = {},
+		mobs = {},
+		mobsChanged = {},
+		explosions = {},
+		clock = 0,
 		worldTime = 0,
 		chat = {},
 		gamemode = "survival",
@@ -161,6 +172,32 @@ function ClientWorld.apply(cw: ClientWorld, kind: number, args: { any })
 			cw.vitals.dead = false
 			cw.deathCause = nil
 			cw.respawnAt = { args[1], args[2], args[3] }
+		elseif kind == S2C.MOBS then
+			local ev = args[1]
+			for _, s in ev.spawned do
+				cw.mobs[s[1]] = { id = s[1], type = s[2], x = s[3], y = s[4], z = s[5], yaw = s[6], health = s[7], hurtAt = -1 }
+				cw.mobsChanged[s[1]] = true
+			end
+			for _, m in ev.moved do
+				local e = cw.mobs[m[1]]
+				if e then
+					e.x, e.y, e.z, e.yaw = m[2], m[3], m[4], m[5]
+					cw.mobsChanged[m[1]] = true
+				end
+			end
+			for _, id in ev.hurt do
+				local e = cw.mobs[id]
+				if e then
+					e.hurtAt = cw.clock
+					cw.mobsChanged[id] = true
+				end
+			end
+			for _, id in ev.removed do
+				cw.mobs[id] = nil
+				cw.mobsChanged[id] = true
+			end
+		elseif kind == S2C.EXPLOSION then
+			table.insert(cw.explosions, { args[1], args[2], args[3], args[4] })
 		elseif kind == S2C.TIME then
 			cw.worldTime = args[1]
 		elseif kind == S2C.CHAT then
@@ -189,6 +226,55 @@ function ClientWorld.target(cw: ClientWorld, ox: number, oy: number, oz: number,
 		local id = st // 16
 		return id ~= 0 and not BlockRegistry.isLiquid(id)
 	end)
+end
+
+-- Ray vs mob boxes. Returns the nearest mob hit within `reach` and its distance.
+function ClientWorld.targetMob(cw: ClientWorld, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, reach: number): (MobView?, number)
+	local len = math.sqrt(dx * dx + dy * dy + dz * dz)
+	if len == 0 then
+		return nil, math.huge
+	end
+	dx, dy, dz = dx / len, dy / len, dz / len
+	local best, bestT = nil, math.huge
+	for _, m in cw.mobs do
+		local kind = MobTypes.get(m.type)
+		local hw = if kind then kind.width / 2 else 0.3
+		local h = if kind then kind.height else 1.8
+		-- slab test against the AABB
+		local tmin, tmax = 0, reach
+		local ok = true
+		for axis = 1, 3 do
+			local o = if axis == 1 then ox elseif axis == 2 then oy else oz
+			local d = if axis == 1 then dx elseif axis == 2 then dy else dz
+			local lo = if axis == 1 then m.x - hw elseif axis == 2 then m.y else m.z - hw
+			local hi = if axis == 1 then m.x + hw elseif axis == 2 then m.y + h else m.z + hw
+			if math.abs(d) < 1e-9 then
+				if o < lo or o > hi then
+					ok = false
+					break
+				end
+			else
+				local t1, t2 = (lo - o) / d, (hi - o) / d
+				if t1 > t2 then
+					t1, t2 = t2, t1
+				end
+				tmin = math.max(tmin, t1)
+				tmax = math.min(tmax, t2)
+				if tmin > tmax then
+					ok = false
+					break
+				end
+			end
+		end
+		if ok and tmin < bestT then
+			best, bestT = m, tmin
+		end
+	end
+	return best, bestT
+end
+
+function ClientWorld.attack(cw: ClientWorld, mobId: number)
+	out(cw, C2S.ATTACK, mobId)
 end
 
 -- Called every frame while the break button is held on block (x,y,z).

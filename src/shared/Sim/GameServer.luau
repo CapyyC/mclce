@@ -29,6 +29,8 @@ local Faces = require("../Mesh/Faces")
 local Survival = require("./Survival")
 local Fluids = require("./Fluids")
 local LightEngine = require("../Voxel/LightEngine")
+local Mobs = require("./Mobs")
+local Time = require("./Time")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -51,6 +53,7 @@ export type Player = {
 	vitals: Survival.Vitals,
 	sentVitals: string,
 	eating: { tick: number, slot: number }?,
+	knownMobs: { [number]: boolean },
 	lastX: number,
 	lastZ: number,
 }
@@ -66,6 +69,7 @@ export type Options = {
 	viewRadius: number?,
 	genBudget: number?,
 	sendBudget: number?,
+	mobs: boolean?, -- natural mob spawning (default on)
 }
 
 export type GameServer = {
@@ -80,6 +84,8 @@ export type GameServer = {
 	items: ItemEntities.ItemEntities,
 	fluids: Fluids.Fluids,
 	light: LightEngine.LightEngine,
+	mobs: Mobs.Mobs,
+	mobsEnabled: boolean,
 	rng: JavaRandom.JavaRandom,
 	tickCount: number,
 	worldTime: number,
@@ -126,6 +132,8 @@ function GameServer.new(opts: Options): GameServer
 		items = ItemEntities.new(),
 		fluids = nil :: any,
 		light = LightEngine.new(world),
+		mobs = Mobs.new(seed.lo + 7),
+		mobsEnabled = opts.mobs ~= false,
 		rng = JavaRandom.new(seed.lo),
 		tickCount = 0,
 		worldTime = 0,
@@ -256,6 +264,7 @@ function GameServer.addPlayer(gs: GameServer, id: number, name: string, record: 
 		vitals = Survival.new(),
 		sentVitals = "",
 		eating = nil,
+		knownMobs = {},
 		lastX = x,
 		lastZ = z,
 	}
@@ -273,6 +282,7 @@ end
 function GameServer._join(gs: GameServer, p: Player)
 	-- (re)start the session for this client: welcome + resend everything
 	p.joined = true
+	p.knownMobs = {}
 	p.sent = {}
 	p.sentCount = 0
 	p.sentInvVersion = -1
@@ -568,6 +578,8 @@ function GameServer.handle(gs: GameServer, id: number, kind: any, args: { any })
 		for pid in gs.players do
 			send(gs, pid, S2C.CHAT, p.name, m.text)
 		end
+	elseif k == C2S.ATTACK then
+		GameServer._attack(gs, p, m.mob)
 	elseif k == C2S.JOIN then
 		GameServer._join(gs, p)
 	elseif k == C2S.HELLO then
@@ -702,6 +714,155 @@ function GameServer._tickSurvival(gs: GameServer, p: Player)
 	p.lastX, p.lastZ = p.x, p.z
 end
 
+-- Mobs & combat -------------------------------------------------------------
+
+function GameServer._mobContext(gs: GameServer): Mobs.Context
+	local world, le = gs.world, gs.light
+	local views = {}
+	for _, p in gs.players do
+		if p.joined then
+			table.insert(views, { id = p.id, x = p.x, y = p.y, z = p.z, attackable = p.gamemode == "survival" and not p.vitals.dead })
+		end
+	end
+	local darken = Time.skyDarken(gs.worldTime)
+	return {
+		players = views,
+		getState = function(x, y, z)
+			return World.getState(world, x, y, z)
+		end,
+		isLoaded = function(x, z)
+			return World.isLoaded(world, math.floor(x), math.floor(z))
+		end,
+		skyLight = function(x, y, z)
+			return LightEngine.sky(le, x, y, z)
+		end,
+		light = function(x, y, z)
+			return LightEngine.light(le, x, y, z, darken)
+		end,
+		isDay = Time.isDay(gs.worldTime),
+		damagePlayer = function(id, amount, cause)
+			local p = gs.players[id]
+			if p then
+				GameServer.damage(gs, p, amount, cause)
+			end
+		end,
+		explode = function(x, y, z, power)
+			GameServer.explode(gs, x, y, z, power)
+		end,
+		dropItem = function(x, y, z, stack)
+			ItemEntities.spawn(gs.items, x, y, z, stack, (gs.rng:nextFloat() - 0.5) * 0.2, 0.2, (gs.rng:nextFloat() - 0.5) * 0.2)
+		end,
+	}
+end
+
+-- Classic-style explosion: blocks within ~power*1.3 with random falloff are
+-- destroyed unless blast-proof (obsidian, bedrock, liquids); each destroyed
+-- block drops with chance 1/power; players take distance-scaled damage.
+function GameServer.explode(gs: GameServer, x: number, y: number, z: number, power: number)
+	local r = math.ceil(power * 1.3)
+	local rng = gs.rng
+	local cx, cy, cz = math.floor(x), math.floor(y), math.floor(z)
+	for by = cy - r, cy + r do
+		for bz = cz - r, cz + r do
+			for bx = cx - r, cx + r do
+				local dx, dy, dz = bx + 0.5 - x, by + 0.5 - y, bz + 0.5 - z
+				local d = math.sqrt(dx * dx + dy * dy + dz * dz)
+				if d > power * (0.7 + rng:nextFloat() * 0.6) then
+					continue
+				end
+				local st = World.getState(gs.world, bx, by, bz)
+				local id = st // 16
+				local hardness = BlockRegistry.hardness(id)
+				if id == 0 or hardness < 0 or hardness >= 50 or BlockRegistry.isLiquid(id) then
+					continue
+				end
+				World.setState(gs.world, bx, by, bz, 0)
+				if rng:nextFloat() < 1 / power then
+					for _, drop in Mining.drops(st, ItemStack.new(278, 1), rng) do
+						ItemEntities.spawn(gs.items, bx + 0.5, by + 0.5, bz + 0.5, drop)
+					end
+				end
+			end
+		end
+	end
+	for _, p in gs.players do
+		local dx, dy, dz = p.x - x, p.y + 0.9 - y, p.z - z
+		local dist = math.sqrt(dx * dx + dy * dy + dz * dz) / (power * 2)
+		if dist <= 1 then
+			local impact = 1 - dist
+			local dmg = math.floor((impact * impact + impact) / 2 * 7 * power * 2 + 1)
+			GameServer.damage(gs, p, dmg, "explosion")
+		end
+		send(gs, p.id, S2C.EXPLOSION, x, y, z, power)
+	end
+	count(gs, "explosions")
+end
+
+function GameServer._attack(gs: GameServer, p: Player, mobId: number)
+	local mob = gs.mobs.list[mobId]
+	if mob == nil then
+		p.rejected += 1
+		return
+	end
+	local ex, ey, ez = p.x, p.y + 1.62, p.z
+	local dx, dy, dz = mob.x - ex, mob.y + mob.kind.height / 2 - ey, mob.z - ez
+	local reach = 3 + mob.kind.width / 2 + Config.REACH_TOLERANCE
+	if dx * dx + dy * dy + dz * dz > reach * reach then
+		p.rejected += 1
+		count(gs, "attackOutOfReach")
+		return
+	end
+	local held = Inventory.held(p.inventory)
+	local def = if held then ItemRegistry.get(held.id) else nil
+	local dmg = if def and def.damage then def.damage else 1
+	local _, landed = Mobs.hurt(gs.mobs, mob, dmg, p.x, p.z, GameServer._mobContext(gs))
+	if landed and p.gamemode == "survival" then
+		Survival.exhaust(p.vitals, Survival.EXHAUSTION.attack)
+		if held and def and def.durability then
+			local wear = if def.tool == "sword" then 1 else 2
+			local nd = held.damage + wear
+			p.inventory.slots[p.inventory.selected] = if nd >= def.durability then nil else ItemStack.new(held.id, 1, held.meta, nd)
+			p.inventory.version += 1
+		end
+	end
+end
+
+local function replicateMobs(gs: GameServer, p: Player, ev: Mobs.Events)
+	local spawned, moved, removed, hurt = {}, {}, {}, {}
+	local r = (gs.viewRadius + 0.5) * 16
+	local r2 = r * r
+	for id, mob in gs.mobs.list do
+		local dx, dz = mob.x - p.x, mob.z - p.z
+		local visible = dx * dx + dz * dz <= r2 and p.sent[Coords.chunkKey(math.floor(mob.x) // 16, math.floor(mob.z) // 16)] == true
+		if visible and not p.knownMobs[id] then
+			p.knownMobs[id] = true
+			table.insert(spawned, { id, mob.kind.id, mob.x, mob.y, mob.z, mob.yaw, mob.health })
+		elseif not visible and p.knownMobs[id] then
+			p.knownMobs[id] = nil
+			table.insert(removed, id)
+		end
+	end
+	for _, mob in ev.moved do
+		if p.knownMobs[mob.id] and gs.mobs.list[mob.id] then
+			table.insert(moved, { mob.id, mob.x, mob.y, mob.z, mob.yaw })
+		end
+	end
+	for _, id in ev.removed do
+		if p.knownMobs[id] then
+			p.knownMobs[id] = nil
+			table.insert(removed, id)
+		end
+	end
+	for _, id in ev.hurt do
+		if p.knownMobs[id] then
+			table.insert(hurt, id)
+		end
+	end
+	if #spawned + #moved + #removed + #hurt > 0 then
+		send(gs, p.id, S2C.MOBS, { spawned = spawned, moved = moved, removed = removed, hurt = hurt })
+	end
+end
+
 -- Tick ----------------------------------------------------------------------
 
 local function inventorySnapshot(inv: Inventory.Inventory): { [string]: any }
@@ -792,6 +953,12 @@ function GameServer.tick(gs: GameServer)
 	end
 	-- fluids
 	Fluids.step(gs.fluids)
+	-- mobs
+	local mctx = GameServer._mobContext(gs)
+	Mobs.tick(gs.mobs, mctx)
+	if gs.mobsEnabled and gs.tickCount % 10 == 0 then
+		Mobs.spawnCycle(gs.mobs, mctx, 12)
+	end
 	-- entities
 	local world = gs.world
 	ItemEntities.tick(gs.items, function(x, y, z)
@@ -818,11 +985,13 @@ function GameServer.tick(gs: GameServer)
 	local changes = gs.pendingChanges
 	gs.pendingChanges = {}
 	local ev = ItemEntities.takeEvents(gs.items)
+	local mev = Mobs.takeEvents(gs.mobs)
 	for _, p in gs.players do
 		if not p.joined then
 			continue
 		end
 		replicateChunks(gs, p)
+		replicateMobs(gs, p, mev)
 		if #changes > 0 then
 			local mine: { number } = {}
 			for i = 1, #changes, 4 do

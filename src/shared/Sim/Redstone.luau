@@ -35,6 +35,17 @@ local Redstone = {}
 
 local WIRE, LEVER, STONE_PLATE, WOOD_PLATE, TORCH_OFF, TORCH_ON, BUTTON = 55, 69, 70, 72, 75, 76, 77
 local LAMP, LAMP_ON, RS_BLOCK, WOOD_DOOR, IRON_DOOR = 123, 124, 152, 64, 71
+local REPEATER, REPEATER_ON = 93, 94
+
+-- Repeater output direction by meta % 4: 0 north (-z), 1 east (+x), 2 south (+z), 3 west (-x).
+-- meta // 4 = extra delay (delay = 1..4 redstone ticks = 2..8 game ticks).
+local REP_DX = { [0] = 0, 1, 0, -1 }
+local REP_DZ = { [0] = -1, 0, 1, 0 }
+
+local function repeaterFacesInto(st: number, rx: number, rz: number, tx: number, tz: number): boolean
+	local d = st % 4
+	return rx + REP_DX[d] == tx and rz + REP_DZ[d] == tz
+end
 
 local HX = { 1, -1, 0, 0 }
 local HZ = { 0, 0, 1, -1 }
@@ -110,6 +121,8 @@ local function stronglyPowered(rs: Redstone, x: number, y: number, z: number): b
 			return true
 		elseif (id == STONE_PLATE or id == WOOD_PLATE) and d == 3 and st % 16 >= 1 then
 			return true
+		elseif id == REPEATER_ON and ny == y and repeaterFacesInto(st % 16, nx, nz, x, z) then
+			return true
 		end
 	end
 	return false
@@ -123,6 +136,11 @@ local function wireConnects(rs: Redstone, x: number, y: number, z: number, i: nu
 	local n = idAt(rs, nx, y, nz)
 	if n == WIRE or n == LEVER or n == BUTTON or n == TORCH_ON or n == TORCH_OFF or n == RS_BLOCK or n == STONE_PLATE or n == WOOD_PLATE then
 		return true
+	end
+	if n == REPEATER or n == REPEATER_ON then
+		-- repeaters connect along their axis only
+		local d = World.getState(rs.world, nx, y, nz) % 4
+		return (REP_DX[d] ~= 0) == (HX[i] ~= 0)
 	end
 	-- step down / up
 	if not isSolidBlock(n) and idAt(rs, nx, y - 1, nz) == WIRE then
@@ -190,6 +208,9 @@ local function componentPowered(rs: Redstone, x: number, y: number, z: number): 
 		if isSourceOn(st) then
 			return true
 		end
+		if id == REPEATER_ON and ny == y and repeaterFacesInto(st % 16, nx, nz, x, z) then
+			return true
+		end
 		if id == WIRE and st % 16 > 0 then
 			if d == 4 then
 				-- wire below does not power upward
@@ -217,6 +238,9 @@ local function wireInput(rs: Redstone, x: number, y: number, z: number): number
 		local nx, ny, nz = x + DX[d], y + DY[d], z + DZ[d]
 		local st = World.getState(rs.world, nx, ny, nz)
 		if isSourceOn(st) then
+			return 15
+		end
+		if st // 16 == REPEATER_ON and ny == y and repeaterFacesInto(st % 16, nx, nz, x, z) then
 			return 15
 		end
 		if isSolidBlock(st // 16) and stronglyPowered(rs, nx, ny, nz) then
@@ -350,6 +374,28 @@ local function schedule(rs: Redstone, x: number, y: number, z: number, delay: nu
 	end
 end
 
+-- Is the repeater at (x,y,z) receiving power at its back?
+local function repeaterInput(rs: Redstone, x: number, y: number, z: number, meta: number): boolean
+	local d = meta % 4
+	local bx, bz = x - REP_DX[d], z - REP_DZ[d]
+	local st = World.getState(rs.world, bx, y, bz)
+	local id = st // 16
+	if id == WIRE then
+		return st % 16 > 0
+	end
+	if isSourceOn(st) then
+		return true
+	end
+	if id == REPEATER_ON and repeaterFacesInto(st % 16, bx, bz, x, z) then
+		return true
+	end
+	return isSolidBlock(id) and blockPowered(rs, bx, y, bz)
+end
+
+local function repeaterDelay(meta: number): number
+	return (meta // 4 + 1) * 2
+end
+
 -- Re-evaluates a single non-wire component.
 local function evaluate(rs: Redstone, x: number, y: number, z: number, netDone: { [number]: boolean })
 	local st = World.getState(rs.world, x, y, z)
@@ -361,6 +407,10 @@ local function evaluate(rs: Redstone, x: number, y: number, z: number, netDone: 
 		local shouldBeOn = not blockPowered(rs, ax, ay, az)
 		if shouldBeOn ~= (id == TORCH_ON) then
 			schedule(rs, x, y, z, Redstone.TORCH_DELAY)
+		end
+	elseif id == REPEATER or id == REPEATER_ON then
+		if repeaterInput(rs, x, y, z, meta) ~= (id == REPEATER_ON) then
+			schedule(rs, x, y, z, repeaterDelay(meta))
 		end
 	elseif id == LAMP or id == LAMP_ON then
 		local on = componentPowered(rs, x, y, z)
@@ -387,6 +437,7 @@ local function evaluate(rs: Redstone, x: number, y: number, z: number, netDone: 
 end
 
 local RELEVANT: { [number]: boolean } = {
+	[REPEATER] = true, [REPEATER_ON] = true,
 	[WIRE] = true, [LEVER] = true, [STONE_PLATE] = true, [WOOD_PLATE] = true, [TORCH_OFF] = true,
 	[TORCH_ON] = true, [BUTTON] = true, [LAMP] = true, [LAMP_ON] = true, [RS_BLOCK] = true,
 	[WOOD_DOOR] = true, [IRON_DOOR] = true,
@@ -438,6 +489,12 @@ function Redstone.step(rs: Redstone)
 				World.setState(rs.world, s.x, s.y, s.z, want * 16 + meta)
 				rs.stats.toggles += 1
 			end
+		elseif id == REPEATER or id == REPEATER_ON then
+			local want = if repeaterInput(rs, s.x, s.y, s.z, meta) then REPEATER_ON else REPEATER
+			if want ~= id then
+				World.setState(rs.world, s.x, s.y, s.z, want * 16 + meta)
+				rs.stats.toggles += 1
+			end
 		elseif id == LAMP_ON then
 			if not componentPowered(rs, s.x, s.y, s.z) then
 				World.setState(rs.world, s.x, s.y, s.z, LAMP * 16)
@@ -476,6 +533,10 @@ function Redstone.use(rs: Redstone, x: number, y: number, z: number): boolean
 			schedule(rs, x, y, z, Redstone.BUTTON_TICKS)
 		end
 		return true
+	elseif id == REPEATER or id == REPEATER_ON then
+		-- cycle the delay 1 -> 4 ticks
+		World.setState(rs.world, x, y, z, id * 16 + (meta + 4) % 16)
+		return true
 	elseif id == WOOD_DOOR then
 		local lowerY = if meta >= 8 then y - 1 else y
 		local lower = World.getState(rs.world, x, lowerY, z)
@@ -496,6 +557,6 @@ function Redstone.setPlate(rs: Redstone, x: number, y: number, z: number, presse
 	end
 end
 
-Redstone.IDS = { WIRE = WIRE, LEVER = LEVER, STONE_PLATE = STONE_PLATE, WOOD_PLATE = WOOD_PLATE, TORCH_OFF = TORCH_OFF, TORCH_ON = TORCH_ON, BUTTON = BUTTON, LAMP = LAMP, LAMP_ON = LAMP_ON, RS_BLOCK = RS_BLOCK, WOOD_DOOR = WOOD_DOOR, IRON_DOOR = IRON_DOOR }
+Redstone.IDS = { REPEATER = REPEATER, REPEATER_ON = REPEATER_ON, WIRE = WIRE, LEVER = LEVER, STONE_PLATE = STONE_PLATE, WOOD_PLATE = WOOD_PLATE, TORCH_OFF = TORCH_OFF, TORCH_ON = TORCH_ON, BUTTON = BUTTON, LAMP = LAMP, LAMP_ON = LAMP_ON, RS_BLOCK = RS_BLOCK, WOOD_DOOR = WOOD_DOOR, IRON_DOOR = IRON_DOOR }
 
 return Redstone

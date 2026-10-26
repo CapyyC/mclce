@@ -95,7 +95,7 @@ local function supported(bu: BlockUpdates, x: number, y: number, z: number, stat
 		return solidTop(below)
 	elseif id == 90 then -- nether portal
 		return Portals.supported(bu.world, x, y, z, state % 16)
-	elseif id == 55 or id == 70 or id == 72 then -- wire, pressure plates
+	elseif id == 55 or id == 70 or id == 72 or id == 93 or id == 94 then -- wire, plates, repeaters
 		return solidTop(below)
 	elseif id == 64 or id == 71 then -- doors: lower on solid ground, upper on its lower half
 		if state % 16 >= 8 then

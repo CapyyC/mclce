@@ -162,6 +162,8 @@ add(72, "wooden_pressure_plate", redstonePart({ 157, 128, 79 }, "planks_oak", "f
 add(75, "unlit_redstone_torch", redstonePart({ 100, 0, 0 }, "redstone_torch_off", "torch", { drops = 76 }))
 add(76, "redstone_torch", redstonePart({ 255, 40, 40 }, "redstone_torch_on", "torch", { light = 7 }))
 add(77, "stone_button", redstonePart({ 125, 125, 125 }, "stone", "torch", { hardness = 0.5 }))
+add(93, "unpowered_repeater", redstonePart({ 160, 160, 160 }, "repeater_off", "flat", { drops = 356 }))
+add(94, "powered_repeater", redstonePart({ 200, 120, 120 }, "repeater_on", "flat", { drops = 356, light = 0 }))
 add(123, "redstone_lamp", cube(0.3, { 110, 70, 40 }, "Glass", { all = "redstone_lamp_off" }))
 add(124, "lit_redstone_lamp", cube(0.3, { 250, 200, 120 }, "Neon", { all = "redstone_lamp_on" }, { light = 15, drops = 123 }))
 add(152, "redstone_block", cube(5.0, { 170, 20, 10 }, "SmoothPlastic", { all = "redstone_block" }, { tool = "pickaxe", needsTool = true }))

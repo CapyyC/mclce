@@ -60,6 +60,7 @@ add("bow", "tools", 3, { 261, 1 }, { { id = STICK, count = 3 }, { id = 287, coun
 add("arrow", "tools", 3, { 262, 4 }, { { id = 318, count = 1 }, { id = STICK, count = 1 }, { id = 288, count = 1 } })
 add("bucket", "tools", 3, { 325, 1 }, { { id = IRON, count = 3 } })
 add("redstone_torch", "mechanisms", 2, { 76, 1 }, { { id = 331, count = 1 }, { id = STICK, count = 1 } })
+add("repeater", "mechanisms", 3, { 356, 1 }, { { id = 76, count = 2 }, { id = 331, count = 1 }, { id = 1, meta = 0, count = 3 } })
 add("lever", "mechanisms", 2, { 69, 1 }, { { id = STICK, count = 1 }, { id = COBBLE, count = 1 } })
 add("stone_button", "mechanisms", 2, { 77, 1 }, { { id = 1, meta = 0, count = 1 } })
 add("stone_pressure_plate", "mechanisms", 2, { 70, 1 }, { { id = 1, meta = 0, count = 2 } })

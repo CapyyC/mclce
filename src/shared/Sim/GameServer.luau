@@ -785,6 +785,13 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 		if meta < 0 or (blockId == 77 and meta == 5) then
 			return reject(gs, p, x, y, z)
 		end
+	elseif blockId == 93 then
+		-- repeater: output points away from the player
+		if not BlockRegistry.occludes(World.getId(gs.world, x, y - 1, z)) then
+			return reject(gs, p, x, y, z)
+		end
+		local dx, dz = (x + 0.5) - p.x, (z + 0.5) - p.z
+		meta = if math.abs(dx) > math.abs(dz) then (if dx > 0 then 1 else 3) else (if dz > 0 then 2 else 0)
 	elseif blockId == 55 or blockId == 70 or blockId == 72 then
 		if not BlockRegistry.occludes(World.getId(gs.world, x, y - 1, z)) then
 			return reject(gs, p, x, y, z)

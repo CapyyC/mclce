@@ -5,4 +5,4 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LUAU="${LUAU:-$ROOT/tools/bin/luau}"
 cd "$ROOT/tests"
 mapfile -t SPECS < <(find . -name '*.spec.luau' | sort | sed 's/\.luau$//')
-"$LUAU" run.luau -a "${SPECS[@]}" "$@"
+"$LUAU" --codegen -O2 run.luau -a "${SPECS[@]}" "$@"

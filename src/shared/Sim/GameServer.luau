@@ -983,6 +983,15 @@ function GameServer.handle(gs: GameServer, id: number, kind: any, args: { any })
 		end
 	elseif k == C2S.ATTACK then
 		GameServer._attack(gs, p, m.mob)
+	elseif k == C2S.CREATIVE_TAKE then
+		local def = ItemRegistry.get(m.item)
+		if p.gamemode ~= "creative" or def == nil or m.item == 90 then -- portal blocks are not obtainable
+			p.rejected += 1
+			return
+		end
+		local inv = p.inventory
+		inv.slots[inv.selected] = ItemStack.new(m.item, def.maxStack, m.meta)
+		inv.version += 1
 	elseif k == C2S.INTERACT then
 		GameServer._interact(gs, p, m.mob)
 	elseif k == C2S.JOIN then

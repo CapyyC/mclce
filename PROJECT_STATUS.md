@@ -18,7 +18,7 @@ _Last updated: 2026-10-26 (cloud session 1). Resume by reading this file, ROADMA
 D/E/F code-complete in shared code and exercised end-to-end in the Roblox mock; **unverified in
 real Studio**. G (Legacy fidelity) started (fluids, light, mobs, block entities, farming).
 
-## Done and tested in the Luau CLI (245 specs passing + Roblox mock sessions PASS in both renderers)
+## Done and tested in the Luau CLI (264 specs passing + Roblox mock sessions PASS in both renderers)
 - Voxel core: Coords, Chunk (lazy u16 sections, heightmap, versions, block entities), World (finite
   Legacy border, batched setStates)
 - BlockRegistry (~95 classic-ID blocks), ItemRegistry (tools, armour, food, buckets, mechanisms)
@@ -29,7 +29,7 @@ real Studio**. G (Legacy fidelity) started (fluids, light, mobs, block entities,
 - Simulation: validated break/place/craft/eat/attack/containers/use; survival; fluids; light; mobs
   (9 types incl. neutral pigmen, arrows); chests/furnaces/spawners; block updates and random ticks;
   farming; buckets; armour; redstone subset; Nether dimension with portals (Dimensions orchestrator)
-- UI models: Legacy category-tab crafting, D-pad focus grid, menu stack (pause/death)
+- UI models: Legacy category-tab crafting, D-pad focus grid, menu stack (pause/death), creative palette
 - Client replica with prediction/rollback; Roblox mock harness runs the real glue end to end
   (boot, stream, render, mine, place, attack, chest UI, Legacy crafting, pause, portal to Nether,
   autosave, shutdown save)

@@ -27,6 +27,7 @@ Protocol.C2S = {
 	ATTACK = 16, -- mobId
 	CONTAINER_CLICK = 17, -- slot (1..27), button
 	INTERACT = 18, -- mobId ("use" on an entity: shears, dye)
+	CREATIVE_TAKE = 19, -- itemId, meta (creative only)
 }
 
 Protocol.S2C = {
@@ -121,6 +122,10 @@ function Protocol.decodeC2S(kind: any, args: { any }): Message?
 	elseif kind == C.CONTAINER_CLICK then
 		if #args == 2 and isInt(args[1], 1, 27) and (args[2] == "left" or args[2] == "right") then
 			return { kind = kind, slot = args[1], button = args[2] }
+		end
+	elseif kind == C.CREATIVE_TAKE then
+		if #args == 2 and isInt(args[1], 1, 4095) and isInt(args[2], 0, 15) then
+			return { kind = kind, item = args[1], meta = args[2] }
 		end
 	elseif kind == C.CHAT then
 		local text = args[1]

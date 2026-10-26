@@ -1,0 +1,15 @@
+local GameServer = require("../../src/shared/Sim/GameServer")
+local Protocol = require("../../src/shared/Net/Protocol")
+return function(t)
+	t.test("creative take is creative-only", function()
+		local gs = GameServer.new({ seed = "c", viewRadius = 1, genBudget = 50, mobs = false })
+		local p = GameServer.addPlayer(gs, 1, "a")
+		GameServer.handle(gs, 1, Protocol.C2S.CREATIVE_TAKE, { 57, 0 })
+		t.eq(p.inventory.slots[1], nil)
+		p.gamemode = "creative"
+		GameServer.handle(gs, 1, Protocol.C2S.CREATIVE_TAKE, { 35, 14 })
+		t.eq(p.inventory.slots[1].id, 35); t.eq(p.inventory.slots[1].meta, 14); t.eq(p.inventory.slots[1].count, 64)
+		GameServer.handle(gs, 1, Protocol.C2S.CREATIVE_TAKE, { 90, 0 })
+		t.eq(p.inventory.slots[1].id, 35, "portal refused")
+	end)
+end

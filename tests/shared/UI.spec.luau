@@ -77,6 +77,24 @@ return function(t)
 			t.falsy(FocusGrid.move(g, "up"))
 		end)
 	end)
+	t.describe("CreativeModel", function()
+		local CreativeModel = require("../../src/shared/UI/CreativeModel")
+		t.test("tabs hold every obtainable item; no portal or technical blocks", function()
+			local m = CreativeModel.new()
+			local seen = {}
+			for _, tab in m.tabs do
+				for _, e in tab.items do
+					seen[e.id .. ":" .. e.meta] = true
+				end
+			end
+			t.truthy(seen["1:0"] and seen["35:14"] and seen["278:0"] and seen["297:0"], "stone, red wool, diamond pickaxe, bread")
+			t.falsy(seen["90:0"]); t.falsy(seen["8:0"]); t.falsy(seen["124:0"])
+			CreativeModel.input(m, "down")
+			t.eq(m.index, 10)
+			CreativeModel.input(m, "tabPrev")
+			t.eq(m.tabs[m.tab].name, "materials")
+		end)
+	end)
 	t.describe("MenuModel", function()
 		t.test("pause menu navigation and resume", function()
 			local m = MenuModel.new()

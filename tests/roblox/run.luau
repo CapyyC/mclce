@@ -232,6 +232,43 @@ do
 	check(inv.Enabled == false, "I closes the inventory")
 end
 
+print("[mock] creative palette: /gamemode creative, I, pick an item")
+do
+	local chatGui = player.PlayerGui:FindFirstChild("mclceChat")
+	key("T")
+	chatGui.Input.Text = "/gamemode creative"
+	chatGui.Input.FocusLost:Fire(true)
+	H.run(0.3)
+	check(sp.gamemode == "creative", "server switched to creative")
+	key("I")
+	local cg = player.PlayerGui:FindFirstChild("mclceCreative")
+	check(cg ~= nil and cg.Enabled, "creative palette opens with I in creative")
+	local inv = player.PlayerGui:FindFirstChild("mclceInventory")
+	check(inv.Enabled == false, "survival inventory stays closed in creative")
+	key("R") -- next tab: decoration
+	key("Return")
+	H.run(0.3)
+	local held = sp.inventory.slots[sp.inventory.selected]
+	check(held ~= nil and held.count > 1, "creative take filled the hotbar slot (" .. (held and held.id .. " x" .. held.count or "nil") .. ")")
+	local cell
+	for _, d in cg:GetDescendants() do
+		if d.Name == "Cell3" then
+			cell = d
+		end
+	end
+	cell.Activated:Fire()
+	H.run(0.3)
+	local held2 = sp.inventory.slots[sp.inventory.selected]
+	check(held2 ~= nil and (held2.id ~= held.id or held2.meta ~= held.meta), "clicking a cell takes that item")
+	key("I")
+	check(cg.Enabled == false, "I closes the palette")
+	key("T")
+	chatGui.Input.Text = "/gamemode survival"
+	chatGui.Input.FocusLost:Fire(true)
+	H.run(0.3)
+	check(sp.gamemode == "survival", "back to survival")
+end
+
 print("[mock] nether portal: light with flint & steel, step in, arrive")
 do
 	local px, py, pz = bx, by, bz + 3

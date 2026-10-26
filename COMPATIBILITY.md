@@ -26,6 +26,7 @@ Console / classic numeric-ID Minecraft (wiki-level facts), never code.
 | Smelting / fuel values | RS, PART | Logic for furnace block entity NI. |
 | Inventory 36 + 4 armour, stack sizes | RS | Click/quick-move semantics approximate Legacy controls. |
 | Reach 4.5 / 5 creative | RS | Server adds latency tolerance. |
+| Creative inventory (tabbed palette, full stack into the selected hotbar slot) | INF, PART | Tab grouping approximates Legacy's; no search, no drag-to-slot, no delete slot. Server rejects CREATIVE_TAKE outside creative. |
 | Hunger/exhaustion/regen/starvation, fall damage | RS | Pre-1.9 values. Difficulty fixed at Normal. |
 | Item entities (gravity 0.04, drag 0.98, pickup 10 ticks, despawn 5 min) | RS | |
 | Day length 24000 ticks, tick 0 = 06:00 | RS | Weather NI. |

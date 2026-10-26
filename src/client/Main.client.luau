@@ -22,6 +22,7 @@ local MobRenderer = require(script.Parent.MobRenderer)
 local ContainerMenu = require(script.Parent.ContainerMenu)
 local WeatherFx = require(script.Parent.WeatherFx)
 local InventoryScreen = require(script.Parent.InventoryScreen)
+local CreativeMenu = require(script.Parent.CreativeMenu)
 local ChatBox = require(script.Parent.ChatBox)
 
 local BS = Config.BLOCK_SIZE
@@ -49,6 +50,9 @@ end)
 local inventoryScreen = InventoryScreen.new(player:WaitForChild("PlayerGui"), function(slot, button)
 	ClientWorld.inventoryClick(cw, slot, button)
 end)
+local creativeMenu = CreativeMenu.new(player:WaitForChild("PlayerGui"), function(id, meta)
+	table.insert(cw.outgoing, { C2S_KIND.CREATIVE_TAKE, id, meta })
+end)
 local menus = LegacyMenus.new(player.PlayerGui, {
 	inventory = function()
 		return cw.inventory
@@ -70,10 +74,15 @@ local menus = LegacyMenus.new(player.PlayerGui, {
 			table.insert(cw.outgoing, { C2S_KIND.CLOSE_CONTAINER }) -- returns the cursor stack
 		end
 		if ev == "open:inventory" then
-			inventoryScreen:setOpen(true)
-			inventoryScreen:render(cw.inventory)
+			if cw.gamemode == "creative" then
+				creativeMenu:setOpen(true)
+			else
+				inventoryScreen:setOpen(true)
+				inventoryScreen:render(cw.inventory)
+			end
 		elseif ev == "close:inventory" then
 			inventoryScreen:setOpen(false)
+			creativeMenu:setOpen(false)
 		end
 	end,
 })
@@ -232,6 +241,9 @@ RunService.RenderStepped:Connect(function(dt)
 			ClientWorld.closeContainer(cw)
 		elseif not cw.container then
 			local inInventory = not menus:isGameplay() and menus.menu.stack[#menus.menu.stack].name == "inventory"
+			if inInventory and creativeMenu.gui.Enabled and creativeMenu:action(act) then
+				continue
+			end
 			if inInventory and (act == "up" or act == "down" or act == "left" or act == "right" or act == "confirm") then
 				inventoryScreen:action(act)
 				inventoryScreen:render(cw.inventory)

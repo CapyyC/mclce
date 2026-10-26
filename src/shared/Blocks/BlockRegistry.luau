@@ -31,6 +31,8 @@ local opacity: { number } = table.create(4096, 0)
 local emission: { number } = table.create(4096, 0)
 local hardness: { number } = table.create(4096, 0)
 local replaceable: { boolean } = table.create(4096, true)
+local cullSame: { boolean } = table.create(4096, false)
+local liquid: { boolean } = table.create(4096, false)
 
 for _, raw in BlockData do
 	local def = raw :: any
@@ -49,6 +51,8 @@ for _, raw in BlockData do
 	emission[i] = def.light
 	hardness[i] = def.hardness
 	replaceable[i] = def.replaceable
+	cullSame[i] = def.cullSame ~= false and (def.shape == "cube" or def.shape == "liquid")
+	liquid[i] = def.shape == "liquid"
 end
 
 -- Frequently used ids, resolved by name so data edits stay consistent.
@@ -146,8 +150,17 @@ function BlockRegistry.isReplaceable(id: number): boolean
 end
 
 function BlockRegistry.isLiquid(id: number): boolean
-	local d = byId[id]
-	return d ~= nil and d.shape == "liquid"
+	return liquid[id + 1] == true
+end
+
+-- Liquids of the same fluid (still/flowing) count as the same block for culling.
+function BlockRegistry.fluidGroup(id: number): number
+	if id == 8 or id == 9 then
+		return 9
+	elseif id == 10 or id == 11 then
+		return 11
+	end
+	return id
 end
 
 function BlockRegistry.all(): { BlockDef }
@@ -165,5 +178,6 @@ end
 BlockRegistry._layer = layer
 BlockRegistry._fullCube = fullCube
 BlockRegistry._opacity = opacity
+BlockRegistry._cullSame = cullSame
 
 return BlockRegistry

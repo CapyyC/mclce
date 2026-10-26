@@ -42,6 +42,9 @@ export type BlockDef = {
 	gravity: boolean,
 	drops: number?, -- item id dropped (defaults to own id); 0 = nothing
 	flammable: boolean,
+	-- Transparent cubes hide faces shared with the same block (glass, water).
+	-- Leaves set false (Legacy renders fancy leaves).
+	cullSame: boolean?,
 }
 
 type Partial = { [string]: any }
@@ -111,7 +114,7 @@ add(14, "gold_ore", cube(3.0, { 143, 140, 125 }, "Slate", { all = "gold_ore" }, 
 add(15, "iron_ore", cube(3.0, { 136, 130, 127 }, "Slate", { all = "iron_ore" }, pick(1)))
 add(16, "coal_ore", cube(3.0, { 115, 115, 115 }, "Slate", { all = "coal_ore" }, pick(0)))
 add(17, "log", cube(2.0, { 102, 81, 51 }, "Wood", { top = "log_oak_top", bottom = "log_oak_top", side = "log_oak" }, { tool = "axe", flammable = true }))
-add(18, "leaves", cube(0.2, { 60, 120, 30 }, "LeafyGrass", { all = "leaves_oak" }, { layer = "cutout", opacity = 1, tool = "shears", flammable = true }))
+add(18, "leaves", cube(0.2, { 60, 120, 30 }, "LeafyGrass", { all = "leaves_oak" }, { layer = "cutout", opacity = 1, tool = "shears", flammable = true, cullSame = false }))
 add(19, "sponge", cube(0.6, { 195, 192, 74 }, "Fabric", { all = "sponge" }))
 add(20, "glass", cube(0.3, { 220, 240, 255 }, "Glass", { all = "glass" }, { layer = "cutout", opacity = 0, drops = 0 }))
 add(21, "lapis_ore", cube(3.0, { 102, 112, 134 }, "Slate", { all = "lapis_ore" }, pick(1)))
@@ -161,7 +164,7 @@ add(121, "end_stone", cube(3.0, { 221, 223, 165 }, "Sandstone", { all = "end_sto
 add(129, "emerald_ore", cube(3.0, { 117, 136, 124 }, "Slate", { all = "emerald_ore" }, pick(2)))
 add(133, "emerald_block", cube(5.0, { 81, 217, 117 }, "SmoothPlastic", { all = "emerald_block" }, pick(2)))
 add(159, "stained_hardened_clay", cube(1.25, { 209, 178, 161 }, "Slate", { all = "hardened_clay_stained_white" }, PICK))
-add(161, "leaves2", cube(0.2, { 60, 110, 30 }, "LeafyGrass", { all = "leaves_acacia" }, { layer = "cutout", opacity = 1, tool = "shears", flammable = true }))
+add(161, "leaves2", cube(0.2, { 60, 110, 30 }, "LeafyGrass", { all = "leaves_acacia" }, { layer = "cutout", opacity = 1, tool = "shears", flammable = true, cullSame = false }))
 add(162, "log2", cube(2.0, { 103, 96, 86 }, "Wood", { top = "log_acacia_top", bottom = "log_acacia_top", side = "log_acacia" }, { tool = "axe", flammable = true }))
 add(172, "hardened_clay", cube(1.25, { 150, 92, 66 }, "Slate", { all = "hardened_clay" }, PICK))
 add(174, "packed_ice", cube(0.5, { 165, 195, 245 }, "Ice", { all = "ice_packed" }, { drops = 0 }))

@@ -84,14 +84,36 @@ local function vein(sink: Sink, rng: JavaRandom.JavaRandom, st: number, size: nu
 		local cy = y0 + (y1 - y0) * t
 		local cz = z0 + (z1 - z0) * t
 		local r = (math.sin(t * math.pi) + 1) * (rng:nextDouble() * size / 16) / 2 + 0.5
-		for bx = math.floor(cx - r), math.floor(cx + r) do
-			local dx = (bx + 0.5 - cx) / r
-			for by = math.floor(cy - r), math.floor(cy + r) do
-				local dy = (by + 0.5 - cy) / r
-				for bz = math.floor(cz - r), math.floor(cz + r) do
-					local dz = (bz + 0.5 - cz) / r
-					if dx * dx + dy * dy + dz * dz < 1 then
-						put(sink, bx, by, bz, st, "stone")
+		-- clip the sphere's bounding box to the sink chunk before iterating
+		local xa, xb = math.max(math.floor(cx - r), sink.bx), math.min(math.floor(cx + r), sink.bx + 15)
+		local za, zb = math.max(math.floor(cz - r), sink.bz), math.min(math.floor(cz + r), sink.bz + 15)
+		if xa > xb or za > zb then
+			continue
+		end
+		local ya, yb = math.max(math.floor(cy - r), 1), math.min(math.floor(cy + r), 255)
+		local chunk = sink.chunk
+		for by = ya, yb do
+			local dy = (by + 0.5 - cy) / r
+			local sec = chunk.sections[by // 16]
+			if sec == nil then
+				continue
+			end
+			local states = sec.states
+			local yoff = (by % 16) * 256
+			for bz = za, zb do
+				local dz = (bz + 0.5 - cz) / r
+				local rem = 1 - dy * dy - dz * dz
+				if rem <= 0 then
+					continue
+				end
+				for bx = xa, xb do
+					local dx = (bx + 0.5 - cx) / r
+					if dx * dx < rem then
+						local off = ((bx - sink.bx) + (bz - sink.bz) * 16 + yoff) * 2
+						if buffer.readu16(states, off) == STONE then
+							-- same block count (stone -> ore), so section bookkeeping is unchanged
+							buffer.writeu16(states, off, st)
+						end
 					end
 				end
 			end
@@ -169,19 +191,26 @@ end
 -- Features owned by source chunk (sx, sz), written into `sink`.
 local function sourceFeatures(seed: { hi: number, lo: number }, src: BaseChunk, sx: number, sz: number, sink: Sink, isSelf: boolean)
 	local bx, bz = sx * 16, sz * 16
-	-- ores (veins may spill up to ~size/2 into neighbours)
+	-- ores. Each vein has its own RNG stream so veins that cannot reach the
+	-- target chunk are skipped without perturbing any other feature.
 	local rng = featureRng(seed, sx, sz, 1)
-	for _, ore in ORES do
-		for _ = 1, ore[2] do
+	for oi, ore in ORES do
+		local size = ore[3]
+		local reach = size / 8 + size / 16 + 2
+		for vi = 1, ore[2] do
 			local x = bx + rng:nextInt(16)
 			local y = rng:nextInt(ore[5] - ore[4]) + ore[4]
 			local z = bz + rng:nextInt(16)
-			vein(sink, rng, ore[1], ore[3], x - 8, y, z - 8)
+			if x + reach < sink.bx or x - reach > sink.bx + 15 or z + reach < sink.bz or z - reach > sink.bz + 15 then
+				continue
+			end
+			vein(sink, featureRng(seed, sx * 64 + oi, sz * 64 + vi, 11), ore[1], size, x - 8, y, z - 8)
 		end
 	end
 	-- lapis: centred distribution around y=16
 	local ly = rng:nextInt(16) + rng:nextInt(16)
-	vein(sink, rng, LAPIS, 7, bx + rng:nextInt(16) - 8, ly, bz + rng:nextInt(16) - 8)
+	local lx0, lz0 = bx + rng:nextInt(16), bz + rng:nextInt(16)
+	vein(sink, featureRng(seed, sx, sz, 12), LAPIS, 7, lx0 - 8, ly, lz0 - 8)
 
 	-- trees
 	local trng = featureRng(seed, sx, sz, 2)
@@ -198,7 +227,12 @@ local function sourceFeatures(seed: { hi: number, lo: number }, src: BaseChunk, 
 			continue
 		end
 		local x, z = bx + lx, bz + lz
+		if x + 3 < sink.bx or x - 3 > sink.bx + 15 or z + 3 < sink.bz or z - 3 > sink.bz + 15 then
+			continue
+		end
 		local kind = biome.treeKind
+		local outer = trng
+		trng = featureRng(seed, x, z, 21)
 		if kind == "spruce" then
 			spruce(sink, trng, x, y + 1, z)
 		elseif kind == "birch" or (kind == "oak" and trng:nextInt(5) == 0 and biome.name == "forest") then
@@ -210,6 +244,7 @@ local function sourceFeatures(seed: { hi: number, lo: number }, src: BaseChunk, 
 		else
 			oak(sink, trng, x, y + 1, z, LOG, LEAVES, 4)
 		end
+		trng = outer
 		if sink.chunk.cx == sx and sink.chunk.cz == sz then
 			-- the block under a trunk becomes dirt
 			local cur = Chunk.getState(sink.chunk, lx, y, lz)

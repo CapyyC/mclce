@@ -56,8 +56,12 @@ function BiomeSource.climate(src: BiomeSource, x: number, z: number): (number, n
 	return t, h, c, r, hl
 end
 
+-- Noises are evaluated lazily in the order the decision tree needs them;
+-- results are identical to evaluating climate() up front.
 function BiomeSource.biomeAt(src: BiomeSource, x: number, z: number): Biomes.Biome
-	local t, h, c, r, hl = BiomeSource.climate(src, x, z)
+	local s = src.scale
+	local c = Octaves.fbm(src.cont, x / (520 * s), 0, z / (520 * s)) * 1.5 + 0.12
+	local t = Octaves.fbm(src.temp, x / (420 * s), 0, z / (420 * s)) * 1.6
 	if c < -0.32 then
 		if c < -0.62 then
 			return B.deep_ocean
@@ -67,15 +71,17 @@ function BiomeSource.biomeAt(src: BiomeSource, x: number, z: number): Biomes.Bio
 		end
 		return if t < -0.4 then B.frozen_ocean else B.ocean
 	end
+	local hl = Octaves.fbm(src.hills, x / (260 * s), 0, z / (260 * s))
 	if c < -0.27 and t > -0.4 and hl < 0.4 then
 		return B.beach
 	end
-	if math.abs(r) < 0.022 and hl < 0.5 then
+	if hl < 0.5 and math.abs(Octaves.fbm(src.river, x / (300 * s), 0, z / (300 * s))) < 0.022 then
 		return B.river
 	end
 	if hl > 0.42 then
 		return B.extreme_hills
 	end
+	local h = Octaves.fbm(src.humid, x / (380 * s), 0, z / (380 * s)) * 1.6
 	if t < -0.42 then
 		return if h > 0 then B.cold_taiga else B.ice_plains
 	elseif t < -0.15 then

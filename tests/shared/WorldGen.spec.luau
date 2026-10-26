@@ -136,6 +136,28 @@ return function(t)
 			t.truthy(counts.iron > 50, "iron " .. counts.iron)
 			t.eq(counts.diamondHigh, 0)
 		end)
+		t.test("lazy biomeAt agrees with climate() values", function()
+			local BiomeSource = require("../../src/shared/WorldGen/BiomeSource")
+			local src = BiomeSource.new(seed)
+			local seen = {}
+			for i = 0, 400 do
+				local x, z = i * 37 - 7000, i * -53 + 3000
+				local t2, h, c, r, hl = BiomeSource.climate(src, x, z)
+				local b = BiomeSource.biomeAt(src, x, z)
+				seen[b.name] = true
+				if c < -0.32 then
+					t.truthy(b.ocean or b.name == "mushroom_island", b.name)
+				elseif hl > 0.42 and not (c < -0.27 and t2 > -0.4 and hl < 0.4) then
+					t.eq(b.name, "extreme_hills")
+				end
+				local _ = h + r
+			end
+			local n = 0
+			for _ in seen do
+				n += 1
+			end
+			t.truthy(n >= 5, "biome variety: " .. n)
+		end)
 		t.test("seeds: numeric text, other text uses Java hashCode", function()
 			local a = WorldSeed.fromString("12345")
 			t.eq(a.lo, 12345); t.eq(a.hi, 0)

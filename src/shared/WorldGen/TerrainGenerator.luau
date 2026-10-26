@@ -128,7 +128,8 @@ function TerrainGenerator.generateBase(gen: Terrain, cx: number, cz: number): Ba
 		end
 	end
 
-	-- trilinear fill
+	-- trilinear fill, written straight into section buffers (the chunk is not
+	-- yet visible to anyone, so per-block bookkeeping is done once at the end)
 	local sections = chunk.sections
 	for sy = 0, GRID_Y - 2 do
 		for sz = 0, 3 do
@@ -144,33 +145,49 @@ function TerrainGenerator.generateBase(gen: Terrain, cx: number, cz: number): Ba
 				end
 				for ly = 0, 7 do
 					local y = sy * 8 + ly
+					local si = y // 16
+					local sec = sections[si]
+					if sec == nil then
+						sec = { states = buffer.create(8192), nonAir = 0 }
+						sections[si] = sec
+					end
+					assert(sec)
+					local states = sec.states
+					local placed = 0
 					local ty = ly / 8
 					local a00 = d000 + (d001 - d000) * ty
 					local a10 = d100 + (d101 - d100) * ty
 					local a01 = d010 + (d011 - d010) * ty
 					local a11 = d110 + (d111 - d110) * ty
+					local rowBase = (y % 16) * 256 + sx * 4
 					for lz = 0, 3 do
 						local tz = lz / 4
 						local b0 = a00 + (a01 - a00) * tz
 						local b1 = a10 + (a11 - a10) * tz
+						local off = (rowBase + (sz * 4 + lz) * 16) * 2
 						for lx = 0, 3 do
 							local d = b0 + (b1 - b0) * (lx / 4)
-							local st = AIR
 							if d > 0 then
-								st = STONE
+								buffer.writeu16(states, off + lx * 2, STONE)
+								placed += 1
 							elseif y < 63 then
-								st = WATER
-							end
-							if st ~= AIR then
-								Chunk.setState(chunk, sx * 4 + lx, y, sz * 4 + lz, st, false)
+								buffer.writeu16(states, off + lx * 2, WATER)
+								placed += 1
 							end
 						end
 					end
+					sec.nonAir += placed
 				end
 			end
 		end
 	end
-	local _ = sections
+	for si = 0, 15 do
+		local sec = sections[si]
+		if sec and sec.nonAir == 0 then
+			sections[si] = nil
+		end
+	end
+	Chunk.rebuildHeightmap(chunk)
 
 	-- surface + bedrock
 	for z = 0, 15 do
@@ -184,8 +201,14 @@ function TerrainGenerator.generateBase(gen: Terrain, cx: number, cz: number): Ba
 			local run = -1
 			local sandstoneLeft = 0
 			local y = Chunk.height(chunk, x, z) - 1
+			local colOff = (x + z * 16) * 2
 			while y >= 0 do
-				local st = Chunk.getState(chunk, x, y, z)
+				local sec = chunk.sections[y // 16]
+				local st = if sec then buffer.readu16(sec.states, colOff + (y % 16) * 512) else AIR
+				if st == STONE and run == -2 then
+					y -= 1
+					continue
+				end
 				if st == STONE then
 					if run == -1 then
 						run = fillerDepth
@@ -232,8 +255,9 @@ function TerrainGenerator.generateBase(gen: Terrain, cx: number, cz: number): Ba
 			end
 			-- bedrock: y=0 always, y=1..4 with decreasing probability
 			Chunk.setState(chunk, x, 0, z, BEDROCK, false)
+			local bh = Hash.hash(gen.seed.hi, wx, wz, 3)
 			for by = 1, 4 do
-				if by <= Hash.hash(gen.seed.hi, wx, wz, by) % 5 then
+				if by <= bit32.extract(bh, (by - 1) * 8, 8) % 5 then
 					Chunk.setState(chunk, x, by, z, BEDROCK, false)
 				end
 			end

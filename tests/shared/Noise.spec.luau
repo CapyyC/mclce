@@ -50,6 +50,15 @@ return function(t)
 				prev = v
 			end
 		end)
+		t.test("fast path is bit-identical to the reference implementation", function()
+			local n = PerlinNoise.new(JavaRandom.new(11))
+			local r = JavaRandom.new(12)
+			for _ = 1, 20000 do
+				local x, y, z = r:nextDouble() * 2000 - 1000, r:nextDouble() * 600 - 300, r:nextDouble() * 2000 - 1000
+				t.eq(PerlinNoise.sample(n, x, y, z), PerlinNoise.sampleReference(n, x, y, z))
+			end
+			t.eq(PerlinNoise.sample(n, 0, 0, 0), PerlinNoise.sampleReference(n, 0, 0, 0))
+		end)
 		t.test("fbm normalised", function()
 			local o = PerlinNoise.Octaves.new(JavaRandom.new(8), 4)
 			for i = 1, 200 do

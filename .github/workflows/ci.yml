@@ -13,5 +13,6 @@ jobs:
           key: luau-${{ hashFiles('scripts/setup-luau.sh') }}
       - run: scripts/setup-luau.sh
       - run: scripts/analyze.sh
+      - run: scripts/syntax-check-roblox.sh
       - run: scripts/test.sh
       - run: scripts/bench.sh --quick

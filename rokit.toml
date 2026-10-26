@@ -1,0 +1,4 @@
+# Toolchain for local development (install Rokit, then `rokit install`).
+# Aftman users: the same [tools] table works in aftman.toml.
+[tools]
+rojo = "rojo-rbx/rojo@7.4.4"

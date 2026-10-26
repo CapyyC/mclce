@@ -42,19 +42,19 @@ Debug handles: `_G.mclceServer.gs` / `.dims` / `.nether` (server), `_G.mclceClie
 
 ## Known gaps / risks
 - Terrain/biomes approximate → seeds do not match console worlds.
-- Renderer: colours + materials only, no textures; EditableMesh path not started. ~22k Parts at
-  radius 6 in the mock — real FPS unknown.
-- Missing: beds, player bows, villages/strongholds/fortresses, the End, weather, enchanting,
-  brewing, pistons/repeaters, Legacy UI art (functional placeholder panels only), audio.
+- Renderer: colours + materials only, no textures. Two renderers (Parts, EditableMesh); real FPS
+  unknown — neither has run in Studio yet.
+- Missing: pistons, villages/strongholds/fortresses, the End, enchanting, brewing, double chests,
+  Legacy UI art (functional placeholder panels only), audio.
 - Nether scale for PS4 1.95 unknown (configurable, default 1:3).
 - Roblox require-by-string in shared modules must be confirmed in Studio (first manual check).
 
 ## Failing tests
-None.
+None (264 specs; mock sessions PASS in both `parts` and `mesh` renderer modes).
 
 ## Next concrete tasks
-1. Studio verification pass (local session) using TESTING.md; fix what the real engine rejects.
-2. Beds (sleep/skip night, spawn point) and player bows.
-3. Parallel-Luau (Actor) world generation on the server; measure tick cost in Studio.
-4. Legacy UI art pass: inventory/furnace screens on FocusGrid, controller focus visuals.
-5. Pistons and repeaters; villages.
+1. Studio verification pass (local MCP session) following TESTING.md; fix what the real engine
+   rejects (require-by-string, EditableMesh limits, Actor messaging, DataStore budgets).
+2. Pistons (push/pull up to 12 blocks, sticky) on top of the redstone network model.
+3. Villages (generation + villager mobs), then the End.
+4. Legacy UI art pass (slot textures, tab icons) once Studio shows what the panels look like.

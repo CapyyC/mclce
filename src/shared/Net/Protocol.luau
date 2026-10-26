@@ -21,6 +21,8 @@ Protocol.C2S = {
 	CLOSE_CONTAINER = 10,
 	RESPAWN = 11,
 	CHAT = 12, -- text
+	USE_START = 13, -- begin using held item (eating)
+	USE_FINISH = 14,
 }
 
 Protocol.S2C = {
@@ -33,6 +35,8 @@ Protocol.S2C = {
 	TIME = 7, -- worldTime ticks
 	BREAK_REJECTED = 8, -- x, y, z, current state
 	CHAT = 9, -- name, text
+	DIED = 11, -- cause
+	RESPAWNED = 12, -- x, y, z
 	ITEMS = 10, -- { spawned = {{id,x,y,z,item,meta,count}}, moved = {{id,x,y,z}}, removed = {id} }
 }
 
@@ -58,7 +62,7 @@ function Protocol.decodeC2S(kind: any, args: { any }): Message?
 		return nil
 	end
 	local C = Protocol.C2S
-	if kind == C.HELLO or kind == C.CANCEL_BREAK or kind == C.CLOSE_CONTAINER or kind == C.RESPAWN then
+	if kind == C.HELLO or kind == C.CANCEL_BREAK or kind == C.CLOSE_CONTAINER or kind == C.RESPAWN or kind == C.USE_START or kind == C.USE_FINISH then
 		return if #args == 0 then { kind = kind } else nil
 	elseif kind == C.START_BREAK or kind == C.FINISH_BREAK then
 		local ok, x, y, z = blockPos(args)

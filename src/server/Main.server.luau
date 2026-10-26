@@ -135,6 +135,9 @@ local function flush()
 	for _, player in Players:GetPlayers() do
 		for _, m in GameServer.takeOutbox(gs, player.UserId) do
 			S2C:FireClient(player, m.kind, table.unpack(m.args))
+			if m.kind == Protocol.S2C.RESPAWNED then
+				task.defer(placeCharacter, player)
+			end
 		end
 	end
 end

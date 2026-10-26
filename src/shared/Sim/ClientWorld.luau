@@ -13,6 +13,7 @@ local Mining = require("../Items/Mining")
 local ItemStack = require("../Items/ItemStack")
 local BlockRegistry = require("../Blocks/BlockRegistry")
 local VoxelRaycast = require("../Physics/VoxelRaycast")
+local ItemRegistry = require("../Items/ItemRegistry")
 
 local S2C, C2S = Protocol.S2C, Protocol.C2S
 
@@ -28,6 +29,10 @@ export type ClientWorld = {
 	worldTime: number,
 	chat: { { string } },
 	gamemode: string,
+	vitals: { health: number, food: number, saturation: number, dead: boolean },
+	deathCause: string?,
+	respawnAt: { number }?, -- set when the server respawned us (adapter moves the camera/character)
+	using: { elapsed: number }?,
 	-- block break prediction
 	breaking: { x: number, y: number, z: number, elapsed: number, need: number }?,
 	predicted: { [string]: number }, -- "x,y,z" -> state before prediction
@@ -48,6 +53,10 @@ function ClientWorld.new(worldSize: number?): ClientWorld
 		worldTime = 0,
 		chat = {},
 		gamemode = "survival",
+		vitals = { health = 20, food = 20, saturation = 5, dead = false },
+		deathCause = nil,
+		respawnAt = nil,
+		using = nil,
 		breaking = nil,
 		predicted = {},
 		outgoing = {},
@@ -131,6 +140,19 @@ function ClientWorld.apply(cw: ClientWorld, kind: number, args: { any })
 				cw.items[id] = nil
 				cw.itemsChanged[id] = true
 			end
+		elseif kind == S2C.PLAYER then
+			local v = args[1]
+			cw.vitals = { health = v.health, food = v.food, saturation = v.saturation, dead = v.dead }
+			cw.gamemode = v.gamemode or cw.gamemode
+		elseif kind == S2C.DIED then
+			cw.vitals.dead = true
+			cw.deathCause = args[1]
+			cw.breaking = nil
+			cw.using = nil
+		elseif kind == S2C.RESPAWNED then
+			cw.vitals.dead = false
+			cw.deathCause = nil
+			cw.respawnAt = { args[1], args[2], args[3] }
 		elseif kind == S2C.TIME then
 			cw.worldTime = args[1]
 		elseif kind == S2C.CHAT then
@@ -217,6 +239,37 @@ function ClientWorld.predictBreak(cw: ClientWorld, x: number, y: number, z: numb
 		cw.predicted[key] = World.getState(cw.world, x, y, z)
 	end
 	setBlock(cw, x, y, z, 0)
+end
+
+ClientWorld.EAT_SECONDS = 1.6
+
+-- Called every frame with whether "use" is held and nothing is targeted.
+-- Eating: hold for 1.6 s (32 ticks) with food in hand.
+function ClientWorld.updateUsing(cw: ClientWorld, held: boolean, dt: number)
+	local item = ClientWorld.held(cw)
+	local def = if item then ItemRegistry.get(item.id) else nil
+	local canEat = held and def ~= nil and def.food ~= nil and cw.vitals.food < 20 and not cw.vitals.dead
+	local u = cw.using
+	if not canEat then
+		cw.using = nil
+		return
+	end
+	if u == nil then
+		cw.using = { elapsed = 0 }
+		out(cw, C2S.USE_START)
+		return
+	end
+	u.elapsed += dt
+	if u.elapsed >= ClientWorld.EAT_SECONDS then
+		out(cw, C2S.USE_FINISH)
+		cw.using = nil
+	end
+end
+
+function ClientWorld.requestRespawn(cw: ClientWorld)
+	if cw.vitals.dead then
+		out(cw, C2S.RESPAWN)
+	end
 end
 
 -- Takes queued outgoing messages.

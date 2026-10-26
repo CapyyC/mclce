@@ -76,9 +76,38 @@ function Hud.new(playerGui: PlayerGui)
 	prog.BorderSizePixel = 0
 	prog.Parent = gui
 	self.progress = prog
+	self.vitals = label(gui, "Vitals", "", UDim2.fromOffset(9 * 52, 20), UDim2.new(0.5, 0, 1, -70), Vector2.new(0.5, 1))
+	local death = Instance.new("Frame")
+	death.Name = "Death"
+	death.Size = UDim2.fromScale(1, 1)
+	death.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+	death.BackgroundTransparency = 0.5
+	death.Visible = false
+	death.Parent = gui
+	self.deathText = label(death, "Title", "You died!", UDim2.fromScale(0.5, 0.1), UDim2.fromScale(0.5, 0.35), Vector2.new(0.5, 0.5))
+	local respawn = Instance.new("TextButton")
+	respawn.Name = "Respawn"
+	respawn.AnchorPoint = Vector2.new(0.5, 0.5)
+	respawn.Position = UDim2.fromScale(0.5, 0.55)
+	respawn.Size = UDim2.fromOffset(240, 44)
+	respawn.Font = Enum.Font.Arcade
+	respawn.TextScaled = true
+	respawn.Text = "Respawn"
+	respawn.Parent = death
+	self.death = death
+	self.respawnButton = respawn
 	self.debug = label(gui, "Debug", "", UDim2.fromOffset(600, 18), UDim2.fromOffset(8, 8))
 	self.debug.TextXAlignment = Enum.TextXAlignment.Left
 	return self
+end
+
+function Hud:setVitals(v, cause: string?)
+	-- half-heart / half-shank counts as text until icon assets exist
+	self.vitals.Text = string.format("HP %d/20   FOOD %d/20", v.health, v.food)
+	self.death.Visible = v.dead
+	if v.dead then
+		self.deathText.Text = "You died! (" .. tostring(cause or "?") .. ")"
+	end
 end
 
 function Hud:update(inventory, progress: number, debugText: string)

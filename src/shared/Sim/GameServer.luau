@@ -26,6 +26,7 @@ local Collision = require("../Physics/Collision")
 local ItemEntities = require("./ItemEntities")
 local JavaRandom = require("../Util/JavaRandom")
 local Faces = require("../Mesh/Faces")
+local Survival = require("./Survival")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -44,9 +45,11 @@ export type Player = {
 	tokens: number,
 	rejected: number, -- invalid/denied requests (diagnostics, kick heuristics)
 	loaded: boolean, -- player data finished loading
-	health: number,
-	food: number,
-	saturation: number,
+	vitals: Survival.Vitals,
+	sentVitals: string,
+	eating: { tick: number, slot: number }?,
+	lastX: number,
+	lastZ: number,
 }
 
 export type Outgoing = { kind: number, args: { any } }
@@ -84,6 +87,9 @@ export type GameServer = {
 }
 
 local GameServer = {}
+
+GameServer.EAT_TICKS = 32
+GameServer.DIFFICULTY = 2 -- normal
 
 local function send(gs: GameServer, pid: number, kind: number, ...: any)
 	local box = gs.outbox[pid]
@@ -233,9 +239,11 @@ function GameServer.addPlayer(gs: GameServer, id: number, name: string, record: 
 		tokens = Config.ACTION_BURST,
 		rejected = 0,
 		loaded = true,
-		health = 20,
-		food = 20,
-		saturation = 5,
+		vitals = Survival.new(),
+		sentVitals = "",
+		eating = nil,
+		lastX = x,
+		lastZ = z,
 	}
 	if record then
 		GameServer._applyRecord(p, record)
@@ -256,11 +264,14 @@ function GameServer._applyRecord(p: Player, r: { [string]: any })
 	if r.gamemode == "creative" or r.gamemode == "survival" then
 		p.gamemode = r.gamemode
 	end
-	if type(r.health) == "number" then
-		p.health = math.clamp(r.health, 0, 20)
+	if type(r.health) == "number" and r.health == r.health then
+		p.vitals.health = math.clamp(r.health, 1, 20)
 	end
-	if type(r.food) == "number" then
-		p.food = math.clamp(r.food, 0, 20)
+	if type(r.food) == "number" and r.food == r.food then
+		p.vitals.food = math.clamp(r.food, 0, 20)
+	end
+	if type(r.saturation) == "number" and r.saturation == r.saturation then
+		p.vitals.saturation = math.clamp(r.saturation, 0, p.vitals.food)
 	end
 	if type(r.inventory) == "table" then
 		for k, s in r.inventory do
@@ -286,7 +297,8 @@ function GameServer.playerRecord(p: Player): { [string]: any }
 	if p.inventory.cursor then
 		Inventory.returnCursor(p.inventory)
 	end
-	return { pos = { p.x, p.y, p.z }, gamemode = p.gamemode, health = p.health, food = p.food, inventory = inv, selected = p.inventory.selected }
+	local v = p.vitals
+	return { pos = { p.x, p.y, p.z }, gamemode = p.gamemode, health = if v.dead then 20 else v.health, food = v.food, saturation = v.saturation, inventory = inv, selected = p.inventory.selected }
 end
 
 function GameServer.removePlayer(gs: GameServer, id: number): { [string]: any }?
@@ -303,6 +315,16 @@ function GameServer.setPlayerPosition(gs: GameServer, id: number, x: number, y: 
 	local p = gs.players[id]
 	if p and x == x and y == y and z == z and math.abs(x) < 1e7 and math.abs(z) < 1e7 then
 		p.x, p.y, p.z = x, y, z
+	end
+end
+
+-- Teleports a player (respawn/commands): resets fall tracking and movement accounting.
+function GameServer.teleport(gs: GameServer, id: number, x: number, y: number, z: number)
+	local p = gs.players[id]
+	if p then
+		p.x, p.y, p.z = x, y, z
+		p.lastX, p.lastZ = x, z
+		p.vitals.fallStartY = nil
 	end
 end
 
@@ -345,6 +367,7 @@ local function doBreak(gs: GameServer, p: Player, x: number, y: number, z: numbe
 	World.setState(gs.world, x, y, z, 0)
 	count(gs, "blocksBroken")
 	if p.gamemode == "survival" then
+		Survival.exhaust(p.vitals, Survival.EXHAUSTION.breakBlock)
 		local held = Inventory.held(p.inventory)
 		for _, drop in Mining.drops(state, held, gs.rng) do
 			ItemEntities.spawn(gs.items, x + 0.5, y + 0.25, z + 0.5, drop, (gs.rng:nextFloat() - 0.5) * 0.2, 0.2, (gs.rng:nextFloat() - 0.5) * 0.2)
@@ -480,6 +503,10 @@ function GameServer.handle(gs: GameServer, id: number, kind: any, args: { any })
 		return
 	end
 	local k = m.kind
+	if p.vitals.dead and k ~= C2S.RESPAWN and k ~= C2S.CHAT and k ~= C2S.HELLO then
+		p.rejected += 1
+		return
+	end
 	if k == C2S.START_BREAK then
 		handleStartBreak(gs, p, m)
 	elseif k == C2S.FINISH_BREAK then
@@ -517,6 +544,37 @@ function GameServer.handle(gs: GameServer, id: number, kind: any, args: { any })
 		end
 	elseif k == C2S.HELLO then
 		p.sentInvVersion = -1
+		p.sentVitals = ""
+	elseif k == C2S.RESPAWN then
+		if p.vitals.dead then
+			Survival.respawn(p.vitals)
+			local x, y, z = GameServer.spawnPoint(gs)
+			GameServer.teleport(gs, p.id, x, y, z)
+			send(gs, p.id, S2C.RESPAWNED, x, y, z)
+		end
+	elseif k == C2S.USE_START then
+		local held = Inventory.held(p.inventory)
+		local def = if held then ItemRegistry.get(held.id) else nil
+		if def and def.food and p.vitals.food < Survival.MAX_FOOD then
+			p.eating = { tick = gs.tickCount, slot = p.inventory.selected }
+		else
+			p.eating = nil
+		end
+	elseif k == C2S.USE_FINISH then
+		local e = p.eating
+		p.eating = nil
+		local held = Inventory.held(p.inventory)
+		local def = if held then ItemRegistry.get(held.id) else nil
+		if e and def and def.food and e.slot == p.inventory.selected and gs.tickCount - e.tick >= math.floor(GameServer.EAT_TICKS * Config.BREAK_TIME_TOLERANCE) then
+			if Survival.eat(p.vitals, def.food, def.saturation or 0) then
+				Inventory.consumeHeld(p.inventory, 1)
+				if def.name == "mushroom_stew" then
+					Inventory.add(p.inventory, ItemStack.new(281, 1))
+				end
+			end
+		else
+			p.rejected += 1
+		end
 	end
 end
 
@@ -532,6 +590,88 @@ function GameServer._nearBlock(gs: GameServer, p: Player, blockId: number, radiu
 		end
 	end
 	return false
+end
+
+-- Survival ------------------------------------------------------------------
+
+local function supported(gs: GameServer, p: Player): (boolean, boolean)
+	local world = gs.world
+	local y = math.floor(p.y - 0.05)
+	local onGround = false
+	for _, o in { { -0.3, -0.3 }, { 0.3, -0.3 }, { -0.3, 0.3 }, { 0.3, 0.3 } } do
+		local h = Collision.solidHeight(World.getState(world, math.floor(p.x + o[1]), y, math.floor(p.z + o[2])))
+		if h > 0 and p.y - (y + h) < 0.1 then
+			onGround = true
+		end
+	end
+	local inLiquid = BlockRegistry.isLiquid(World.getId(world, math.floor(p.x), math.floor(p.y + 0.1), math.floor(p.z)))
+	return onGround, inLiquid
+end
+
+function GameServer.kill(gs: GameServer, p: Player, cause: string)
+	if not p.vitals.dead then
+		Survival.damage(p.vitals, p.vitals.health)
+	end
+	GameServer._onDeath(gs, p, cause)
+end
+
+function GameServer._onDeath(gs: GameServer, p: Player, cause: string)
+	p.breaking, p.eating = nil, nil
+	-- drop everything (keepInventory off)
+	Inventory.returnCursor(p.inventory)
+	for i = 1, Inventory.SIZE do
+		local s = p.inventory.slots[i]
+		if s then
+			ItemEntities.spawn(gs.items, p.x, p.y + 1, p.z, s, (gs.rng:nextFloat() - 0.5) * 0.4, 0.2, (gs.rng:nextFloat() - 0.5) * 0.4)
+			p.inventory.slots[i] = nil
+		end
+	end
+	p.inventory.cursor = nil
+	p.inventory.version += 1
+	count(gs, "deaths")
+	send(gs, p.id, S2C.DIED, cause)
+end
+
+function GameServer.damage(gs: GameServer, p: Player, amount: number, cause: string): number
+	if p.gamemode == "creative" or p.vitals.dead then
+		return 0
+	end
+	local dealt, died = Survival.damage(p.vitals, amount)
+	if died then
+		GameServer._onDeath(gs, p, cause)
+	end
+	return dealt
+end
+
+function GameServer._tickSurvival(gs: GameServer, p: Player)
+	local v = p.vitals
+	if v.dead then
+		return
+	end
+	local onGround, inLiquid = supported(gs, p)
+	local loaded = World.isLoaded(gs.world, math.floor(p.x), math.floor(p.z))
+	if loaded and p.gamemode == "survival" then
+		local fall = Survival.trackFall(v, p.y, onGround, inLiquid)
+		if fall > 0 then
+			GameServer.damage(gs, p, fall, "fell")
+		end
+		local dx, dz = p.x - p.lastX, p.z - p.lastZ
+		local dist = math.sqrt(dx * dx + dz * dz)
+		if dist < 2 then -- ignore teleports
+			local sprint = dist > 0.23 -- faster than walking speed (4.3 b/s)
+			Survival.exhaust(v, dist * (if sprint then Survival.EXHAUSTION.sprintPerBlock else Survival.EXHAUSTION.walkPerBlock))
+		end
+		if p.y < -64 then
+			GameServer.damage(gs, p, 4, "void")
+		end
+		local dmg = Survival.tickFood(v, GameServer.DIFFICULTY)
+		if v.dead and dmg > 0 then
+			GameServer._onDeath(gs, p, "starved")
+		end
+	else
+		v.fallStartY = nil
+	end
+	p.lastX, p.lastZ = p.x, p.z
 end
 
 -- Tick ----------------------------------------------------------------------
@@ -606,6 +746,10 @@ function GameServer.tick(gs: GameServer)
 			gs.failedLoads[k] = nil
 		end
 	end
+	-- survival
+	for _, p in gs.players do
+		GameServer._tickSurvival(gs, p)
+	end
 	-- chunk lifecycle
 	local viewers = {}
 	for _, p in gs.players do
@@ -629,7 +773,7 @@ function GameServer.tick(gs: GameServer)
 		ItemEntities.merge(gs.items)
 	end
 	for _, p in gs.players do
-		if p.health > 0 then
+		if not p.vitals.dead then
 			for _, e in ItemEntities.inPickupRange(gs.items, p.x, p.y, p.z) do
 				local left = Inventory.add(p.inventory, e.stack)
 				if left == 0 then
@@ -657,6 +801,12 @@ function GameServer.tick(gs: GameServer)
 			if #mine > 0 then
 				send(gs, p.id, S2C.BLOCKS, Protocol.encodeBlockChanges(mine))
 			end
+		end
+		local v = p.vitals
+		local vs = string.format("%d:%d:%.1f:%s:%s", v.health, v.food, v.saturation, tostring(v.dead), p.gamemode)
+		if vs ~= p.sentVitals then
+			p.sentVitals = vs
+			send(gs, p.id, S2C.PLAYER, { health = v.health, food = v.food, saturation = v.saturation, dead = v.dead, gamemode = p.gamemode })
 		end
 		if p.inventory.version ~= p.sentInvVersion then
 			p.sentInvVersion = p.inventory.version

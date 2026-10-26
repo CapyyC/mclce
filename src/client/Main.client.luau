@@ -34,6 +34,9 @@ local crafting = CraftingMenu.new(player.PlayerGui, function(recipeId, grid)
 	table.insert(cw.outgoing, { C2S_KIND.CRAFT, recipeId, grid })
 end)
 Input.start()
+hud.respawnButton.Activated:Connect(function()
+	ClientWorld.requestRespawn(cw)
+end)
 
 S2C.OnClientEvent:Connect(function(kind, ...)
 	ClientWorld.apply(cw, kind, { ... })
@@ -177,6 +180,9 @@ RunService.RenderStepped:Connect(function(dt)
 		placeCooldown = 0.2 -- classic right-click repeat: 4 ticks
 	end
 	a.placePressed = false
+	-- eating: hold "use" while not aiming at a block
+	ClientWorld.updateUsing(cw, a.placeHeld and hit == nil, dt)
+	hud:setVitals(cw.vitals, cw.deathCause)
 
 	for _, m in ClientWorld.takeOutgoing(cw) do
 		C2S:FireServer(table.unpack(m))

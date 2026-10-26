@@ -40,6 +40,9 @@ end
 check(sections > 20, "collision/render sections: " .. sections)
 check(parts > 100, "box parts: " .. parts)
 if mode == "mesh" then
+	check(parts < 8000, "collision boxes limited to near the player: " .. parts)
+end
+if mode == "mesh" then
 	local meshFolder = ws:FindFirstChild("mclceMeshWorld")
 	check(meshFolder ~= nil and #meshFolder:GetChildren() > 20, "mesh parts: " .. (meshFolder and #meshFolder:GetChildren() or 0) .. " (" .. H.meshStats.triangles .. " triangles)")
 	check(visible == 0 or visible < parts * 0.05, "collision boxes are invisible (visible=" .. visible .. ")")

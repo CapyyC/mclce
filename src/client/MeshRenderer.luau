@@ -17,6 +17,8 @@ local World = require(Shared.Voxel.World)
 local ChunkRenderer = require(script.Parent.ChunkRenderer)
 
 local BS = Config.BLOCK_SIZE
+-- Collision boxes are only needed where the local character can touch them.
+local COLLISION_RADIUS = 2 -- chunks
 
 local MeshRenderer = {}
 MeshRenderer.__index = MeshRenderer
@@ -32,6 +34,8 @@ function MeshRenderer.new(cw, parent: Instance)
 	self.fallback.root.Name = "mclceFallbackWorld"
 	self.sections = {}
 	self.failures = 0
+	self.colBuilt = {} -- section key -> true when collision boxes exist
+	self.focusCx, self.focusCz = math.huge, math.huge
 	self.stats = { sectionsBuilt = 0, parts = 0, lastBuildMs = 0, meshes = 0, fallbacks = 0, triangles = 0 }
 	return self
 end
@@ -91,6 +95,7 @@ function MeshRenderer:dropSection(key: number)
 		self.sections[key] = nil
 	end
 	self.collision:dropSection(key)
+	self.colBuilt[key] = nil
 	self.fallback:dropSection(key)
 end
 
@@ -147,7 +152,13 @@ function MeshRenderer:buildSection(cx: number, cz: number, si: number)
 		self.fallback:buildSection(cx, cz, si)
 	else
 		self.fallback:dropSection(key)
-		self.collision:buildSection(cx, cz, si)
+		if math.max(math.abs(cx - self.focusCx), math.abs(cz - self.focusCz)) <= COLLISION_RADIUS then
+			self.collision:buildSection(cx, cz, si)
+			self.colBuilt[key] = true
+		else
+			self.collision:dropSection(key)
+			self.colBuilt[key] = nil
+		end
 	end
 	self.sections[key] = { meshes = meshes }
 	self.stats.meshes += #meshes
@@ -156,9 +167,38 @@ function MeshRenderer:buildSection(cx: number, cz: number, si: number)
 	self.stats.lastBuildMs = (os.clock() - t0) * 1000
 end
 
+-- Adds collision near the focus chunk and drops it elsewhere (bounded work).
+function MeshRenderer:_updateCollision(fcx: number, fcz: number, budget: number)
+	local done = 0
+	for key, s in self.sections do
+		if done >= budget then
+			break
+		end
+		if #s.meshes == 0 then
+			continue -- fallback Parts already collide
+		end
+		local cx, cz, si = RemeshQueue.unpack(key)
+		local near = math.max(math.abs(cx - fcx), math.abs(cz - fcz)) <= COLLISION_RADIUS
+		if near and not self.colBuilt[key] then
+			self.collision:buildSection(cx, cz, si)
+			self.colBuilt[key] = true
+			done += 1
+		elseif not near and self.colBuilt[key] then
+			self.collision:dropSection(key)
+			self.colBuilt[key] = nil
+			done += 1
+		end
+	end
+	return done
+end
+
 function MeshRenderer:step(budget: number, focusBlock: Vector3)
 	local cw = self.cw
 	local fcx, fcz, fsi = math.floor(focusBlock.X) // 16, math.floor(focusBlock.Z) // 16, math.clamp(math.floor(focusBlock.Y) // 16, 0, 15)
+	if fcx ~= self.focusCx or fcz ~= self.focusCz or self.collisionPending then
+		self.focusCx, self.focusCz = fcx, fcz
+		self.collisionPending = self:_updateCollision(fcx, fcz, 16) >= 16
+	end
 	local keys = RemeshQueue.pop(cw.remesh, budget, fcx, fcz, fsi, function(cx, cz)
 		return World.getChunk(cw.world, cx, cz) ~= nil
 	end)

@@ -28,5 +28,6 @@ across greedy quads is impossible (no `fract()` in a shader).
   invisible greedy boxes. After 3 EditableMesh failures it permanently falls back to Parts.
 - Mock numbers at radius 6: Part renderer ~22k visible Parts; mesh renderer 507 MeshParts
   (~170k triangles) + ~21k invisible collision boxes.
-- TODO: build collision boxes only within ~2 chunks of the player; unknown whether Roblox's
+- Collision boxes are built only within 2 chunks of the camera (mock: ~4.8k instead of ~21k).
+- Unknown whether Roblox's
   winding convention matches `Config.MESH_CLOCKWISE = false` (flip if faces look inside-out).

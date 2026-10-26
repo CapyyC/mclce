@@ -20,3 +20,13 @@ across greedy quads is impossible (no `fract()` in a shader).
 ## Consequences
 - Part counts must be measured in Studio (TESTING.md lists it). If too high, reduce view radius,
   or merge distant sections into coarser LOD boxes.
+
+## Update (session 1)
+- `MeshRenderer` (opt-in: `workspace:SetAttribute("mclceRenderer", "mesh")` or `Config.RENDERER`)
+  builds one MeshPart per section/layer from `MeshBuilder` batches (vertex colours with classic face
+  shading; atlas UVs when `Config.ATLAS_ASSET` is set, which forces non-greedy quads). Collision uses
+  invisible greedy boxes. After 3 EditableMesh failures it permanently falls back to Parts.
+- Mock numbers at radius 6: Part renderer ~22k visible Parts; mesh renderer 507 MeshParts
+  (~170k triangles) + ~21k invisible collision boxes.
+- TODO: build collision boxes only within ~2 chunks of the player; unknown whether Roblox's
+  winding convention matches `Config.MESH_CLOCKWISE = false` (flip if faces look inside-out).

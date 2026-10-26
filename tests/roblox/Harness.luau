@@ -34,6 +34,21 @@ local Lighting = service("Lighting")
 local DataStoreService = service("DataStoreService")
 local UserInputService = service("UserInputService")
 local ContextActionService = service("ContextActionService")
+local AssetService = service("AssetService")
+local meshStats = { meshes = 0, triangles = 0 }
+Mock.addMethods(AssetService, {
+	CreateEditableMesh = function()
+		return Mock.newEditableMesh()
+	end,
+	CreateMeshPartAsync = function(_, content)
+		assert(type(content) == "table" and content._type == "Content", "CreateMeshPartAsync expects Content")
+		Mock.task.wait(0)
+		local _, nt = rawget(content.object, "_counts")()
+		meshStats.meshes += 1
+		meshStats.triangles += nt
+		return Mock.Instance.new("MeshPart")
+	end,
+})
 Lighting.ClockTime = 14
 UserInputService.TouchEnabled = false
 local camera = Instance.new("Camera", Workspace)
@@ -255,6 +270,7 @@ local function makeEnv(side, scriptInst)
 		UDim = Mock.UDim,
 		UDim2 = Mock.UDim2,
 		Enum = Mock.Enum,
+		Content = Mock.Content,
 		task = Mock.task,
 		os = setmetatable({ clock = function()
 			return Mock.now
@@ -364,4 +380,5 @@ return {
 	trafficByKind = trafficByKind,
 	caches = caches,
 	sideG = sideG,
+	meshStats = meshStats,
 }

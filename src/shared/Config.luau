@@ -23,6 +23,14 @@ Config.BREAK_TIME_TOLERANCE = 0.7 -- accept breaks after >= 70% of expected time
 Config.ACTIONS_PER_SECOND = 20 -- token bucket refill
 Config.ACTION_BURST = 40
 
+-- Renderer: "parts" (greedy-box Parts, works everywhere) or "mesh"
+-- (EditableMesh visuals + invisible box collision). Override at runtime with
+-- workspace:SetAttribute("mclceRenderer", "mesh"). "mesh" is unverified in Studio.
+Config.RENDERER = "parts"
+Config.MESH_CLOCKWISE = false -- flip if faces render inside-out in Studio
+Config.ATLAS_ASSET = "" -- rbxassetid of an original/licensed 16x16-tile atlas (optional)
+Config.ATLAS_COLUMNS = 16
+
 Config.WORLD_SIZE = 864 -- Classic
 Config.DEFAULT_SEED = "mclce"
 

@@ -52,9 +52,11 @@ local function styleOf(id: number): Style
 	return s
 end
 
-function ChunkRenderer.new(cw, parent: Instance)
+-- opts.collisionOnly: invisible boxes for physics only (used under the mesh renderer)
+function ChunkRenderer.new(cw, parent: Instance, opts)
 	local self = setmetatable({}, ChunkRenderer)
 	self.cw = cw
+	self.collisionOnly = opts ~= nil and opts.collisionOnly == true
 	self.root = Instance.new("Folder")
 	self.root.Name = "mclceWorld"
 	self.root.Parent = parent
@@ -129,17 +131,21 @@ function ChunkRenderer:buildSection(cx: number, cz: number, si: number)
 		local o = b * BoxMesher.BOX_STRIDE
 		local x, y, z, sx, sy, sz, st = data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o + 5], data[o + 6], data[o + 7]
 		local style = styleOf(st // 16)
+		if self.collisionOnly and not style.collide then
+			continue
+		end
 		local p = self:_take()
 		p.Size = Vector3.new(sx * BS, sy * BS, sz * BS)
 		p.CFrame = CFrame.new((bx + x + sx / 2) * BS, (by + y + sy / 2) * BS, (bz + z + sz / 2) * BS)
 		p.Color = style.color
 		p.Material = style.material
-		p.Transparency = style.transparency
+		p.Transparency = if self.collisionOnly then 1 else style.transparency
+		p.CastShadow = not self.collisionOnly
 		p.CanCollide = style.collide
 		p.Parent = folder
 		table.insert(parts, p)
 	end
-	for i = 0, mesh.specialCount - 1 do
+	for i = 0, if self.collisionOnly then -1 else mesh.specialCount - 1 do
 		local o = i * 4
 		local x, y, z, st = mesh.specials[o + 1], mesh.specials[o + 2], mesh.specials[o + 3], mesh.specials[o + 4]
 		local id = st // 16

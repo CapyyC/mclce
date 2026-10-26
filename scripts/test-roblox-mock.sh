@@ -26,4 +26,9 @@ parts.append("}\n")
 open(out, "w", encoding="utf-8").write("".join(parts))
 PY
 cd "$ROOT/tests/roblox"
-"$LUAU" run.luau "$@"
+if [ "$#" -gt 0 ]; then
+  "$LUAU" run.luau -a "$@"
+else
+  "$LUAU" run.luau -a parts
+  "$LUAU" run.luau -a mesh
+fi

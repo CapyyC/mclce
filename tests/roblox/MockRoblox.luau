@@ -365,6 +365,18 @@ function methods:ClearAllChildren()
 		c:Destroy()
 	end
 end
+function methods:GetAttribute(name)
+	local a = rawget(self, "_attributes")
+	return a and a[name]
+end
+function methods:SetAttribute(name, value)
+	local a = rawget(self, "_attributes")
+	if a == nil then
+		a = {}
+		rawset(self, "_attributes", a)
+	end
+	a[name] = value
+end
 function methods:GetFullName()
 	local names = {}
 	local i = self
@@ -440,7 +452,7 @@ InstanceMeta.__newindex = function(self, k, v)
 	if k == "CFrame" then
 		assert(type(v) == "table" and rawget(v, "_cf"), "CFrame property expects a CFrame")
 	end
-	if k == "Size" and rawget(self, "_class") == "Part" then
+	if k == "Size" and (rawget(self, "_class") == "Part" or rawget(self, "_class") == "MeshPart") then
 		assert(type(v) == "table" and v.X and v.X >= 0 and v.Y >= 0 and v.Z >= 0, "Size expects non-negative Vector3")
 	end
 	props[k] = v
@@ -457,7 +469,7 @@ function Instance.new(cls, parent)
 		sig.queueing = cls == "RemoteEvent"
 		rawget(inst, "_events")[e] = sig
 	end
-	if cls == "Part" then
+	if cls == "Part" or cls == "MeshPart" then
 		local p = rawget(inst, "_props")
 		p.Size = v3(4, 1, 2)
 		p.CFrame = Mock.CFrame.new(0, 0, 0)
@@ -568,5 +580,63 @@ local function jsonSize(v, path)
 	error("cannot store " .. tv .. " in a DataStore at " .. path, 0)
 end
 Mock.jsonSize = jsonSize
+
+-- EditableMesh (validates ids/limits like the engine: 60k verts, 20k tris)
+function Mock.newEditableMesh()
+	local em = Instance.new("EditableMesh")
+	local nv, nt, nc, nu = 0, 0, 0, 0
+	Mock.addMethods(em, {
+		AddVertex = function(_, p)
+			assert(type(p) == "table" and getmetatable(p) ~= nil and p.X, "AddVertex expects Vector3")
+			nv += 1
+			assert(nv <= 60000, "EditableMesh vertex limit exceeded")
+			return nv
+		end,
+		AddColor = function(_, c, a)
+			assert(type(c) == "table" and c._type == "Color3" and type(a) == "number", "AddColor(Color3, alpha)")
+			nc += 1
+			return nc
+		end,
+		AddUV = function(_, uv)
+			assert(type(uv) == "table" and uv._type == "Vector2", "AddUV expects Vector2")
+			nu += 1
+			return nu
+		end,
+		AddTriangle = function(_, a, b, c)
+			for _, v in { a, b, c } do
+				assert(type(v) == "number" and v >= 1 and v <= nv, "AddTriangle: bad vertex id")
+			end
+			nt += 1
+			assert(nt <= 20000, "EditableMesh triangle limit exceeded")
+			return nt
+		end,
+		SetFaceColors = function(_, f, ids)
+			assert(f >= 1 and f <= nt and #ids == 3, "SetFaceColors")
+			for _, i in ids do
+				assert(i >= 1 and i <= nc, "bad color id")
+			end
+		end,
+		SetFaceUVs = function(_, f, ids)
+			assert(f >= 1 and f <= nt and #ids == 3, "SetFaceUVs")
+			for _, i in ids do
+				assert(i >= 1 and i <= nu, "bad uv id")
+			end
+		end,
+	})
+	rawset(em, "_counts", function()
+		return nv, nt
+	end)
+	return em
+end
+
+Mock.Content = {
+	fromObject = function(obj)
+		assert(Mock.isInstance(obj), "Content.fromObject expects an Instance")
+		return { _type = "Content", object = obj }
+	end,
+	fromUri = function(uri)
+		return { _type = "Content", uri = uri }
+	end,
+}
 
 return Mock

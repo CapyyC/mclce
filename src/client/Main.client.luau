@@ -33,7 +33,8 @@ player.CameraMode = Enum.CameraMode.LockFirstPerson -- Legacy default is first p
 local cw = ClientWorld.new()
 -- debug handle for the Studio command bar / MCP: _G.mclceClient.cw
 _G.mclceClient = { cw = cw }
-local renderer = ChunkRenderer.new(cw, workspace)
+local rendererKind = workspace:GetAttribute("mclceRenderer") or Config.RENDERER
+local renderer = if rendererKind == "mesh" then require(script.Parent.MeshRenderer).new(cw, workspace) else ChunkRenderer.new(cw, workspace)
 _G.mclceClient.renderer = renderer
 local mobRenderer = MobRenderer.new(cw, workspace)
 local hud = Hud.new(player:WaitForChild("PlayerGui"))

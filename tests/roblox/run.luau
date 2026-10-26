@@ -1,5 +1,7 @@
 -- Scripted session: boot server, join one player, start the client, stream,
 -- mine, place, shut down. Fails on any script error or broken expectation.
+local mode = ({ ... })[1] or "parts"
+print("[mock] renderer mode: " .. mode)
 local H = require("./Harness")
 local Mock = H.Mock
 local check = H.check
@@ -10,6 +12,7 @@ H.run(1)
 local RS = H.services.ReplicatedStorage
 check(RS:FindFirstChild("mclceC2S") ~= nil and RS:FindFirstChild("mclceS2C") ~= nil, "server created remotes")
 
+H.services.Workspace:SetAttribute("mclceRenderer", mode)
 print("[mock] player joins, client starts")
 local player = H.addPlayer(1001, "alice")
 H.run(0.5)
@@ -22,15 +25,25 @@ end
 local ws = H.services.Workspace
 local worldFolder = ws:FindFirstChild("mclceWorld")
 check(worldFolder ~= nil, "client created world folder")
-local sections, parts = 0, 0
+local sections, parts, visible = 0, 0, 0
 if worldFolder then
 	for _, f in worldFolder:GetChildren() do
 		sections += 1
-		parts += #f:GetChildren()
+		for _, p in f:GetChildren() do
+			parts += 1
+			if p.Transparency < 1 then
+				visible += 1
+			end
+		end
 	end
 end
-check(sections > 20, "rendered sections: " .. sections)
-check(parts > 100, "rendered parts: " .. parts)
+check(sections > 20, "collision/render sections: " .. sections)
+check(parts > 100, "box parts: " .. parts)
+if mode == "mesh" then
+	local meshFolder = ws:FindFirstChild("mclceMeshWorld")
+	check(meshFolder ~= nil and #meshFolder:GetChildren() > 20, "mesh parts: " .. (meshFolder and #meshFolder:GetChildren() or 0) .. " (" .. H.meshStats.triangles .. " triangles)")
+	check(visible == 0 or visible < parts * 0.05, "collision boxes are invisible (visible=" .. visible .. ")")
+end
 local root = player.Character.HumanoidRootPart
 check(root.Anchored == false, "character unanchored after client HELLO")
 check(player.PlayerGui:FindFirstChild("mclceHud") ~= nil, "HUD created")

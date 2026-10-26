@@ -27,6 +27,16 @@ Console / classic numeric-ID Minecraft (wiki-level facts), never code.
 | Hunger/exhaustion/regen/starvation, fall damage | RS | Pre-1.9 values. Difficulty fixed at Normal. |
 | Item entities (gravity 0.04, drag 0.98, pickup 10 ticks, despawn 5 min) | RS | |
 | Day length 24000 ticks, tick 0 = 06:00 | RS | Weather NI. |
-| Fluids, redstone, lighting, mobs, combat, Nether/End | NI | |
+| Fluids (water 5 t / lava 30 t, levels, falling, infinite water, drop-seeking, reactions) | RS, PART | Flow-direction search simplified; no flowing-fluid pushing entities. |
+| Light (sky/block 0–15, opacity costs, lossless sky down) | RS | Matches classic propagation rules; verified vs brute-force fixpoint. |
+| Day/night sky darkening (0 noon, 11 midnight), mob spawn light ≤ 7 | RS | |
+| Mobs: pig/cow/sheep/chicken/zombie/skeleton/creeper/spider | PART | Classic HP/damage/drops; AI simplified; skeletons melee (no bows); caps 30/20 INF (LCE caps differ). |
+| Combat: weapon damage, 10-tick i-frames, knockback, tool wear | RS, PART | No crits, no armour yet. |
+| Creeper explosion power 3, damage formula | RS, PART | Sphere-based block destruction (not ray-based); drop chance 1/power RS. |
+| Furnace: 200 ticks/item, coal = 8 items, lit swap | RS | |
+| Chests 27 slots | RS | No double chests. |
+| Random ticks (3/section/tick), crops, saplings, grass, leaf decay (4 blocks), cane/cactus | RS, PART | Growth probabilities simplified. |
+| Falling sand/gravel | INF | Instant fall, no falling-block entity. |
+| Redstone, Nether/End, weather, armour, enchanting, brewing | NI | |
 | Legacy UI (menus, tooltips, controller focus) | NI | Only functional HUD/crafting list. |
 | Save format | n/a | Own DataStore schema (regions of 4x4 chunks); not console-save compatible by design. |

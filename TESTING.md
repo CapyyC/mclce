@@ -32,7 +32,14 @@ Last run (session 1): **136 passed, 0 failed**; analyzer clean; Roblox glue pars
 | Protocol validation | Protocol.spec | malformed-input table |
 | Persistence | SaveManager.spec | fault injection, migrations, in-flight edits |
 | Server core | GameServer.spec | break timing, reach, rate limit, restart persistence, failed reads |
-| Client/server | ClientServer.spec | replica convergence, prediction rollback |
+| Client/server | ClientServer.spec | replica convergence, prediction rollback, mobs, eating |
+| Survival | Survival.spec, GameServerSurvival.spec | classic constants (fall = ceil(d-3), regen 80 t) |
+| Fluids | Fluids.spec | 7-block diamond = 113 cells; lava 30 t / 2 per block |
+| Light | LightEngine.spec | brute-force relaxation fixpoint after random edits |
+| Mobs | Mobs.spec, GameServerMobs.spec | jump apex 1.2522, i-frames, fuse 30 t |
+| Time | Time.spec | noon 0 / midnight 11 darkness |
+| Block entities | BlockEntities.spec, GameServerContainers.spec | coal smelts exactly 8; persistence |
+| Block updates/farming | BlockUpdates.spec, GameServerFarming.spec | support rules, growth, buckets |
 
 ## Manual Studio verification (cannot be run in the cloud sessions)
 Prereq: Rojo 7.x, `rojo serve` + Studio plugin (or `rojo build -o mclce.rbxlx`). Enable

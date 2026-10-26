@@ -15,43 +15,47 @@ _Last updated: 2026-10-26 (cloud session 1). Resume by reading this file, ROADMA
   **unexecuted** (parse-checked only).
 
 ## Current milestone
-D (playable prototype) code-complete but **unverified in Studio**; E (streaming/saving) and F
-(survival) partially done.
+D/E/F code-complete in shared code and exercised end-to-end in the Roblox mock; **unverified in
+real Studio**. G (Legacy fidelity) started (fluids, light, mobs, block entities, farming).
 
-## Done and tested in the Luau CLI (149 specs passing)
-- Voxel core: Coords, Chunk (lazy u16 sections, heightmap, versions), World (finite Legacy border)
-- BlockRegistry (~75 classic-ID blocks), item registry (tools, food, materials)
+## Done and tested in the Luau CLI (205 specs passing + Roblox mock session PASS)
+- Voxel core: Coords, Chunk (lazy u16 sections, heightmap, versions, block entities), World (finite
+  Legacy border)
+- BlockRegistry (~77 classic-ID blocks), ItemRegistry (tools, food, buckets, mob drops)
 - Meshing: culled + greedy quads (SectionMesher), greedy boxes with hidden-cell wildcards (BoxMesher)
-- Deterministic world gen: bit-exact JavaRandom (JDK fixture), own Perlin (fast path bit-identical to
-  reference), approximate biomes, density terrain, worm caves (seamless), ores/trees/plants with
-  order-independent decoration
-- Streaming: chunk scheduler (budgets, cancellation, hysteresis), remesh queue (neighbour invalidation)
-- Persistence: versioned RLE chunk codec, Base64, region-batched SaveManager (retries/backoff,
-  migrations, in-flight edit safety, never generates over unreadable saves)
-- Server core (GameServer): validated break (timing anti-cheat)/place/craft/eat, rate limiting,
-  per-player chunk + block-change replication, item entities, survival (hunger, regen, fall damage,
-  death drops, respawn)
-- Client replica (ClientWorld): message application, break prediction with rollback
-- Protocol with strict validation of untrusted input
-- Benchmarks (`scripts/bench.sh`): see ADR 0001 and bench output
+- World gen: bit-exact JavaRandom (JDK fixture), own Perlin (bit-identical fast path), approximate
+  biomes, density terrain, seamless worm caves, order-independent ores/trees/plants
+- Streaming: chunk scheduler, remesh queue (no leaks toward unloaded neighbours)
+- Persistence: chunk codec v2 (RLE + block entities, v1 readable), Base64, region-batched SaveManager
+  (retries/backoff, migrations, in-flight edit safety, never generates over unreadable saves)
+- Simulation (GameServer): validated break/place/craft/eat/attack/container clicks, rate limiting,
+  JOIN handshake, per-player chunk/block/mob/item replication, survival (hunger, regen, fall damage,
+  death drops, respawn), fluids (water/lava, infinite water, reactions), light engine (verified vs
+  brute force), mobs (8 types, AI, light-based spawning, creeper explosions), chests/furnaces,
+  block updates (support pops, falling sand), random ticks (grass, crops, saplings, cane, cactus,
+  leaf decay), hoe/seeds/buckets/torch attachment
+- Client replica (ClientWorld): prediction + rollback, mobs, containers, targeting
+- Roblox mock harness runs the real glue (boot, join, stream, render, mine, place, attack, chest UI,
+  crafting menu, autosave, shutdown save)
 
-## Roblox glue (written, NOT run)
-`src/server/Main.server.luau`, `DataStoreBackend.luau`; `src/client/Main.client.luau`,
-`ChunkRenderer.luau` (pooled greedy-box Parts), `Hud.luau`, `Input.luau`, `CraftingMenu.luau`.
-Manual verification procedure: TESTING.md → "Manual Studio verification".
+## Roblox glue (written, run only in the mock)
+`src/server`: Main.server, DataStoreBackend. `src/client`: Main.client, ChunkRenderer (pooled greedy
+Parts), MobRenderer, Hud, Input, CraftingMenu, ContainerMenu. Debug handles: `_G.mclceServer.gs`
+(server), `_G.mclceClient.cw` / `.renderer` (client) for the Studio command bar / MCP.
 
 ## Known gaps / risks
-- Biome selection and terrain shaping are approximations → seeds do not match console worlds.
-- Renderer has no textures/lighting (colour + material only); EditableMesh path not started.
-- No mobs, fluids flow, redstone, lighting engine, block entities (chests/furnaces), Legacy UI.
-- Roblox require-by-string from shared modules must be confirmed in Studio (first manual check).
+- Terrain/biomes approximate → seeds do not match console worlds.
+- Renderer: colours + materials only, no textures; EditableMesh path not started. ~22k Parts at
+  radius 6 in the mock — real FPS unknown.
+- No armour, bows/arrows (skeletons melee), redstone, structures, Nether/End, weather, Legacy UI art.
+- Roblox require-by-string in shared modules must be confirmed in Studio (first manual check).
 
 ## Failing tests
 None.
 
 ## Next concrete tasks
-1. Studio verification pass (local session with Studio/MCP) — fix glue bugs found.
-2. Fluid simulation (water/lava spread, Legacy flow rules) in shared + tests.
-3. Light engine (sky/block light propagation) feeding face brightness for the mesh renderer.
-4. Passive/hostile mob basics (AI, spawning rules, combat) in shared + glue.
-5. EditableMesh textured renderer with a licensed/original atlas; keep Part fallback.
+1. Studio verification pass (local session) using TESTING.md; fix what the real engine rejects.
+2. Armour (items, slots, damage reduction) + skeleton arrows (projectile entity).
+3. EditableMesh textured renderer behind a feature flag, Part renderer as fallback.
+4. Legacy Console UI screens (inventory/crafting/furnace layouts, controller focus).
+5. Structures (villages/dungeons) and the Nether (portal, 1/8 scale).

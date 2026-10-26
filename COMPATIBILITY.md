@@ -39,6 +39,10 @@ Console / classic numeric-ID Minecraft (wiki-level facts), never code.
 | Chests 27 slots | RS | No double chests. |
 | Random ticks (3/section/tick), crops, saplings, grass, leaf decay (4 blocks), cane/cactus | RS, PART | Growth probabilities simplified. |
 | Falling sand/gravel | INF | Instant fall, no falling-block entity. |
-| Redstone, Nether/End, weather, armour, enchanting, brewing | NI | |
+| Nether: 128-high netherrack caverns, bedrock shell, lava sea ≤ 31, glowstone, quartz | INF, PART | Approximate shape; no fortresses, ghasts or magma cubes; zombie pigmen (neutral, group anger). |
+| Nether size / coordinate scale | UNK | Configurable `Config.NETHER_SCALE` (default 1:3, 288-block Nether for Classic). Java uses 1:8; PS4 1.95 value not verified. |
+| Portals: obsidian frames 2..21 x 3..21, flint & steel, 4 s standing, exit search 16 blocks / creation | RS, PART | Nether lava 10 t / 1 per block; water evaporates. |
+| Redstone (wire, torches, levers, buttons, plates, lamps, blocks, doors) | RS, PART | No repeaters, comparators, pistons, hoppers; no quasi-connectivity or torch burnout. |
+| End, weather, enchanting, brewing | NI | |
 | Legacy UI (menus, tooltips, controller focus) | NI | Only functional HUD/crafting list. |
 | Save format | n/a | Own DataStore schema (regions of 4x4 chunks); not console-save compatible by design. |

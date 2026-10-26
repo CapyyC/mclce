@@ -71,8 +71,37 @@ hud.respawnButton.Activated:Connect(function()
 	ClientWorld.requestRespawn(cw)
 end)
 
+local seenResets = 0
+local helloSent = false
+local playerDims = {}
+local function applyCharacterVisibility()
+	local myDim = cw.dimension
+	for _, other in Players:GetPlayers() do
+		if other ~= player and other.Character then
+			local hidden = playerDims[tostring(other.UserId)] ~= nil and playerDims[tostring(other.UserId)] ~= myDim
+			for _, d in other.Character:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.LocalTransparencyModifier = if hidden then 1 else 0
+				end
+			end
+		end
+	end
+end
+
 S2C.OnClientEvent:Connect(function(kind, ...)
+	if kind == S2C_KIND.DIMS then
+		playerDims = (...) or {}
+		applyCharacterVisibility()
+		return
+	end
 	ClientWorld.apply(cw, kind, { ... })
+	if cw.resets ~= seenResets then
+		-- WELCOME: new session or dimension change, drop everything rendered
+		seenResets = cw.resets
+		renderer:dropAll()
+		helloSent = false
+		applyCharacterVisibility()
+	end
 	if kind == S2C_KIND.UNLOAD then
 		renderer:dropChunk(...)
 	elseif kind == S2C_KIND.INVENTORY then
@@ -128,7 +157,6 @@ local function renderItems()
 	table.clear(cw.itemsChanged)
 end
 
-local helloSent = false
 local placeCooldown = 0
 
 function nearCraftingTable(px: number, py: number, pz: number): boolean

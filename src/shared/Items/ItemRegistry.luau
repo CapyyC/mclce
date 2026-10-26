@@ -98,6 +98,9 @@ for _, m in ARMOR do
 	end
 end
 add({ id = 334, name = "leather", maxStack = 64 })
+add({ id = 259, name = "flint_and_steel", maxStack = 1, durability = 64 })
+add({ id = 406, name = "quartz", maxStack = 64 })
+add({ id = 371, name = "gold_nugget", maxStack = 64 })
 
 add({ id = 359, name = "shears", maxStack = 1, tool = "shears", tier = 0, speed = 15, durability = 238 })
 add({ id = 260, name = "apple", maxStack = 64, food = 4, saturation = 0.3 })

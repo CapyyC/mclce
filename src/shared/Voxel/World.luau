@@ -116,6 +116,32 @@ function World.setState(world: World, wx: number, wy: number, wz: number, state:
 	return true
 end
 
+-- Writes several blocks, then notifies listeners for each change. Use for
+-- multi-block structures (portals) whose blocks are only valid together.
+-- `changes` is flat x, y, z, state.
+function World.setStates(world: World, changes: { number })
+	local fired: { number } = {}
+	for i = 1, #changes, 4 do
+		local wx, wy, wz, state = changes[i], changes[i + 1], changes[i + 2], changes[i + 3]
+		if wy < 0 or wy >= 256 or not World.inBorder(world, wx, wz) then
+			continue
+		end
+		local c = world.chunks[Coords.chunkKey(wx // 16, wz // 16)]
+		if c then
+			local old = Chunk.setState(c, wx % 16, wy, wz % 16, state)
+			if old ~= state then
+				local n = #fired
+				fired[n + 1], fired[n + 2], fired[n + 3], fired[n + 4], fired[n + 5] = wx, wy, wz, old, state
+			end
+		end
+	end
+	for i = 1, #fired, 5 do
+		for _, fn in world.listeners do
+			fn(fired[i], fired[i + 1], fired[i + 2], fired[i + 3], fired[i + 4])
+		end
+	end
+end
+
 function World.addListener(world: World, fn: BlockChange): () -> ()
 	table.insert(world.listeners, fn)
 	return function()

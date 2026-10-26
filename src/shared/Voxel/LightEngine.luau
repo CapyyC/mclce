@@ -28,6 +28,7 @@ export type LightEngine = {
 	lcx: number,
 	lcz: number,
 	lbuf: buffer?,
+	noSky: boolean,
 }
 
 local LightEngine = {}
@@ -42,8 +43,9 @@ local DX = { 1, -1, 0, 0, 0, 0 }
 local DY = { 0, 0, 1, -1, 0, 0 }
 local DZ = { 0, 0, 0, 0, 1, -1 }
 
-function LightEngine.new(world: World.World): LightEngine
-	return { world = world, data = {}, addQ = {}, remQ = {}, remLevel = {}, stats = { visits = 0 }, lcx = math.huge, lcz = math.huge, lbuf = nil }
+-- noSky: dimensions without a sky (the Nether) keep sky light at 0.
+function LightEngine.new(world: World.World, noSky: boolean?): LightEngine
+	return { world = world, data = {}, addQ = {}, remQ = {}, remLevel = {}, stats = { visits = 0 }, lcx = math.huge, lcz = math.huge, lbuf = nil, noSky = noSky == true }
 end
 
 local function opacityAt(le: LightEngine, x: number, y: number, z: number): number
@@ -54,7 +56,7 @@ end
 -- channel 1 = sky (high nibble), 0 = block (low nibble)
 local function getL(le: LightEngine, x: number, y: number, z: number, sky: boolean): number
 	if y > 255 then
-		return if sky then 15 else 0
+		return if sky and not le.noSky then 15 else 0
 	end
 	if y < 0 then
 		return 0
@@ -97,7 +99,7 @@ end
 
 function LightEngine.sky(le: LightEngine, x: number, y: number, z: number): number
 	local l = getL(le, x, y, z, true)
-	return if l < 0 then 15 else l
+	return if l < 0 then (if le.noSky then 0 else 15) else l
 end
 
 function LightEngine.block(le: LightEngine, x: number, y: number, z: number): number
@@ -207,7 +209,7 @@ function LightEngine.addChunk(le: LightEngine, cx: number, cz: number)
 	local q = le.addQ
 	local lowest = table.create(256, 0)
 	-- 1. direct sky light down each column
-	for z = 0, 15 do
+	for z = 0, if le.noSky then -1 else 15 do
 		for x = 0, 15 do
 			local level = 15
 			local y
@@ -317,6 +319,9 @@ function LightEngine.onBlockChanged(le: LightEngine, x: number, y: number, z: nu
 		return
 	end
 	for _, sky in { true, false } do
+		if sky and le.noSky then
+			continue
+		end
 		local cur = getL(le, x, y, z, sky)
 		local target = if sky then 0 else emNew
 		-- remove this cell's light (and what depended on it), then refill

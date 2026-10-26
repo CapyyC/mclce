@@ -35,6 +35,7 @@ export type Mob = {
 	age: number,
 	persistent: boolean,
 	wantJump: boolean,
+	angryAt: number?, -- neutral mobs: player id that hurt them
 }
 
 export type PlayerView = { id: number, x: number, y: number, z: number, attackable: boolean }
@@ -49,6 +50,7 @@ export type Context = {
 	damagePlayer: (id: number, amount: number, cause: string, fromX: number, fromZ: number) -> (),
 	explode: (x: number, y: number, z: number, power: number) -> (),
 	dropItem: (x: number, y: number, z: number, stack: ItemStack.ItemStack) -> (),
+	spawnList: { string }?, -- hostile spawn list for this dimension (default overworld)
 }
 
 export type Events = { spawned: { Mob }, moved: { Mob }, removed: { number }, hurt: { number } }
@@ -165,11 +167,20 @@ local function die(m: Mobs, mob: Mob, ctx: Context)
 	Mobs.remove(m, mob.id)
 end
 
--- Applies damage with knockback away from (fromX, fromZ). Returns (died, landed);
+-- Applies damage with knockback away from (fromX, fromZ). `attackerId`
+-- angers neutral mobs at that player. Returns (died, landed);
 -- hits during the invulnerability window don't land.
-function Mobs.hurt(m: Mobs, mob: Mob, amount: number, fromX: number, fromZ: number, ctx: Context): (boolean, boolean)
+function Mobs.hurt(m: Mobs, mob: Mob, amount: number, fromX: number, fromZ: number, ctx: Context, attackerId: number?): (boolean, boolean)
 	if mob.hurtTicks > 0 then
 		return false, false
+	end
+	if attackerId and mob.kind.neutral then
+		-- the whole nearby group joins in (classic pigman behaviour)
+		for _, other in m.list do
+			if other.kind == mob.kind and math.abs(other.x - mob.x) < 16 and math.abs(other.z - mob.z) < 16 then
+				other.angryAt = attackerId
+			end
+		end
 	end
 	mob.health -= amount
 	mob.hurtTicks = 10
@@ -208,6 +219,9 @@ local function think(m: Mobs, mob: Mob, ctx: Context)
 	if kind.hostile then
 		local p, dist = nearestPlayer(ctx, mob.x, mob.y, mob.z)
 		local canChase = p ~= nil and p.attackable and dist <= Mobs.CHASE_RANGE
+		if kind.neutral then
+			canChase = canChase and p ~= nil and mob.angryAt == p.id
+		end
 		-- spiders are neutral in daylight
 		if kind.name == "spider" and ctx.isDay and mob.hurtTicks == 0 then
 			canChase = false
@@ -487,8 +501,13 @@ function Mobs.spawnCycle(m: Mobs, ctx: Context, attempts: number): number
 		local hostileTurn = rng:nextInt(4) ~= 0
 		if hostileTurn and m.hostileCount < MobTypes.HOSTILE_CAP then
 			if ctx.light(x, y, z) <= 7 then
-				local r = rng:nextInt(100)
-				local kind = if r < 35 then MobTypes.byName("zombie") elseif r < 60 then MobTypes.byName("skeleton") elseif r < 80 then MobTypes.byName("creeper") else MobTypes.byName("spider")
+				local kind
+				if ctx.spawnList then
+					kind = MobTypes.byName(ctx.spawnList[rng:nextInt(#ctx.spawnList) + 1])
+				else
+					local r = rng:nextInt(100)
+					kind = if r < 35 then MobTypes.byName("zombie") elseif r < 60 then MobTypes.byName("skeleton") elseif r < 80 then MobTypes.byName("creeper") else MobTypes.byName("spider")
+				end
 				Mobs.spawn(m, kind, x + 0.5, y, z + 0.5)
 				spawned += 1
 			end

@@ -100,6 +100,16 @@ function ChunkRenderer:dropSection(key: number)
 	end
 end
 
+function ChunkRenderer:dropAll()
+	local keys = {}
+	for k in self.sections do
+		table.insert(keys, k)
+	end
+	for _, k in keys do
+		self:dropSection(k)
+	end
+end
+
 function ChunkRenderer:dropChunk(cx: number, cz: number)
 	for si = 0, 15 do
 		self:dropSection(RemeshQueue.sectionKey(cx, cz, si))

@@ -99,6 +99,18 @@ function MeshRenderer:dropSection(key: number)
 	self.fallback:dropSection(key)
 end
 
+function MeshRenderer:dropAll()
+	local keys = {}
+	for k in self.sections do
+		table.insert(keys, k)
+	end
+	for _, k in keys do
+		self:dropSection(k)
+	end
+	self.collision:dropAll()
+	self.fallback:dropAll()
+end
+
 function MeshRenderer:dropChunk(cx: number, cz: number)
 	for si = 0, 15 do
 		self:dropSection(RemeshQueue.sectionKey(cx, cz, si))

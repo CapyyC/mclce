@@ -35,6 +35,7 @@ local Time = require("./Time")
 local BlockEntities = require("./BlockEntities")
 local BlockUpdates = require("./BlockUpdates")
 local Redstone = require("./Redstone")
+local Portals = require("./Portals")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -58,6 +59,8 @@ export type Player = {
 	sentVitals: string,
 	eating: { tick: number, slot: number }?,
 	knownMobs: { [number]: boolean },
+	portalTicks: number,
+	portalCooldown: number,
 	open: { x: number, y: number, z: number, version: number }?,
 	lastX: number,
 	lastZ: number,
@@ -75,6 +78,7 @@ export type Options = {
 	genBudget: number?,
 	sendBudget: number?,
 	mobs: boolean?, -- natural mob spawning (default on)
+	dimension: string?, -- "overworld" (default) | "nether"
 }
 
 export type GameServer = {
@@ -91,6 +95,7 @@ export type GameServer = {
 	light: LightEngine.LightEngine,
 	mobs: Mobs.Mobs,
 	mobsEnabled: boolean,
+	dimension: string,
 	furnaces: { [number]: { number } }, -- position key -> {x, y, z}
 	spawners: { [number]: { number } },
 	updates: BlockUpdates.BlockUpdates,
@@ -133,7 +138,7 @@ function GameServer.new(opts: Options): GameServer
 	local save = if opts.backend then SaveManager.new(opts.backend, opts.worldId or "world", clock) else nil
 	gs = {
 		world = world,
-		generator = WorldGenerator.new(seed, { cacheCapacity = 256 }),
+		generator = WorldGenerator.new(seed, { cacheCapacity = 256, dimension = opts.dimension }),
 		seedText = seedText,
 		scheduler = nil :: any,
 		save = save,
@@ -142,9 +147,10 @@ function GameServer.new(opts: Options): GameServer
 		pendingChanges = {},
 		items = ItemEntities.new(),
 		fluids = nil :: any,
-		light = LightEngine.new(world),
+		light = LightEngine.new(world, opts.dimension == "nether"),
 		mobs = Mobs.new(seed.lo + 7),
 		mobsEnabled = opts.mobs ~= false,
+		dimension = opts.dimension or "overworld",
 		furnaces = {},
 		spawners = {},
 		updates = nil :: any,
@@ -172,7 +178,7 @@ function GameServer.new(opts: Options): GameServer
 			return World.chunkInBorder(world, cx, cz) and gs.failedLoads[Coords.chunkKey(cx, cz)] == nil
 		end,
 	}, gs.viewRadius + 1, { hysteresis = 2, maxLoaded = Config.MAX_LOADED_CHUNKS })
-	gs.fluids = Fluids.new(world, 2048)
+	gs.fluids = Fluids.new(world, 2048, gs.dimension == "nether")
 	gs.updates = BlockUpdates.new(world, {
 		popBlock = function(x, y, z)
 			local st = World.getState(world, x, y, z)
@@ -218,7 +224,7 @@ function GameServer.open(gs: GameServer): (boolean, string?)
 		local seedText = gs.save.meta.seed
 		if type(seedText) == "string" and seedText ~= gs.seedText then
 			gs.seedText = seedText
-			gs.generator = WorldGenerator.new(WorldSeed.fromString(seedText), { cacheCapacity = 256 })
+			gs.generator = WorldGenerator.new(WorldSeed.fromString(seedText), { cacheCapacity = 256, dimension = gs.dimension })
 		end
 		gs.worldTime = tonumber(gs.save.meta.time) or 0
 	end
@@ -294,6 +300,14 @@ function GameServer.spawnPoint(gs: GameServer): (number, number, number)
 			ChunkScheduler.markLoaded(gs.scheduler, 0, 0)
 		end
 	end
+	if gs.dimension == "nether" then
+		for y = 33, 120 do
+			if BlockRegistry.isSolid(World.getId(gs.world, 0, y - 1, 0)) and World.getId(gs.world, 0, y, 0) == 0 and World.getId(gs.world, 0, y + 1, 0) == 0 then
+				return 0.5, y, 0.5
+			end
+		end
+		return 0.5, 64, 0.5
+	end
 	return 0.5, World.height(gs.world, 0, 0), 0.5
 end
 
@@ -321,6 +335,8 @@ function GameServer.addPlayer(gs: GameServer, id: number, name: string, record: 
 		sentVitals = "",
 		eating = nil,
 		knownMobs = {},
+		portalTicks = 0,
+		portalCooldown = 100,
 		lastX = x,
 		lastZ = z,
 	}
@@ -343,7 +359,7 @@ function GameServer._join(gs: GameServer, p: Player)
 	p.sentCount = 0
 	p.sentInvVersion = -1
 	p.sentVitals = ""
-	send(gs, p.id, S2C.WELCOME, { seed = gs.seedText, size = gs.world.maxX - gs.world.minX + 1, x = p.x, y = p.y, z = p.z, gamemode = p.gamemode })
+	send(gs, p.id, S2C.WELCOME, { seed = gs.seedText, size = gs.world.maxX - gs.world.minX + 1, x = p.x, y = p.y, z = p.z, gamemode = p.gamemode, dimension = gs.dimension })
 end
 
 function GameServer._applyRecord(p: Player, r: { [string]: any })
@@ -510,7 +526,19 @@ function GameServer._useItem(gs: GameServer, p: Player, held: ItemStack.ItemStac
 			end
 		end
 	end
-	if def.tool == "hoe" then
+	if held.id == 259 then -- flint and steel: light a portal in the cell in front of the face
+		local fx, fy, fz = tx + Faces.DX[face], ty + Faces.DY[face], tz + Faces.DZ[face]
+		if Portals.tryIgnite(world, fx, fy, fz) then
+			if survival and def.durability then
+				local nd = held.damage + 1
+				p.inventory.slots[p.inventory.selected] = if nd >= def.durability then nil else ItemStack.new(held.id, 1, held.meta, nd)
+				p.inventory.version += 1
+			end
+		else
+			reject(gs, p)
+		end
+		return true
+	elseif def.tool == "hoe" then
 		if face ~= 3 and (tid == 2 or tid == 3) and World.getId(world, tx, ty + 1, tz) == 0 then
 			World.setState(world, tx, ty, tz, 60 * 16)
 			if survival and def.durability then
@@ -544,6 +572,10 @@ function GameServer._useItem(gs: GameServer, p: Player, held: ItemStack.ItemStac
 			x, y, z = tx + Faces.DX[face], ty + Faces.DY[face], tz + Faces.DZ[face]
 		end
 		local cur = World.getId(world, x, y, z)
+		if held.id == 326 and gs.dimension == "nether" then
+			replaceHeld(325) -- water evaporates
+			return true
+		end
 		if y >= 0 and y <= 255 and World.isLoaded(world, x, z) and World.inBorder(world, x, z) and (BlockRegistry.isReplaceable(cur) and not (BlockRegistry.isLiquid(cur) and World.getState(world, x, y, z) % 16 == 0)) then
 			World.setState(world, x, y, z, (if held.id == 326 then 9 else 11) * 16)
 			replaceHeld(325)
@@ -1096,7 +1128,8 @@ function GameServer._mobContext(gs: GameServer): Mobs.Context
 		light = function(x, y, z)
 			return LightEngine.light(le, x, y, z, darken)
 		end,
-		isDay = Time.isDay(gs.worldTime),
+		isDay = gs.dimension ~= "nether" and Time.isDay(gs.worldTime),
+		spawnList = if gs.dimension == "nether" then { "zombie_pigman" } else nil,
 		damagePlayer = function(id, amount, cause)
 			local p = gs.players[id]
 			if p then
@@ -1172,7 +1205,7 @@ function GameServer._attack(gs: GameServer, p: Player, mobId: number)
 	local held = Inventory.held(p.inventory)
 	local def = if held then ItemRegistry.get(held.id) else nil
 	local dmg = if def and def.damage then def.damage else 1
-	local _, landed = Mobs.hurt(gs.mobs, mob, dmg, p.x, p.z, GameServer._mobContext(gs))
+	local _, landed = Mobs.hurt(gs.mobs, mob, dmg, p.x, p.z, GameServer._mobContext(gs), p.id)
 	if landed and p.gamemode == "survival" then
 		Survival.exhaust(p.vitals, Survival.EXHAUSTION.attack)
 		if held and def and def.durability then
@@ -1292,9 +1325,22 @@ function GameServer.tick(gs: GameServer)
 			gs.failedLoads[k] = nil
 		end
 	end
-	-- survival
+	-- survival, portal timers
 	for _, p in gs.players do
 		GameServer._tickSurvival(gs, p)
+		local inPortal = World.getId(gs.world, math.floor(p.x), math.floor(p.y + 0.1), math.floor(p.z)) == Portals.PORTAL
+			or World.getId(gs.world, math.floor(p.x), math.floor(p.y + 1.2), math.floor(p.z)) == Portals.PORTAL
+		if p.portalCooldown > 0 then
+			p.portalCooldown -= 1
+			if inPortal then
+				p.portalCooldown = math.max(p.portalCooldown, 20) -- stay out until stepping off
+			end
+			p.portalTicks = 0
+		elseif inPortal and not p.vitals.dead then
+			p.portalTicks += 1
+		else
+			p.portalTicks = 0
+		end
 	end
 	-- chunk lifecycle
 	local viewers = {}

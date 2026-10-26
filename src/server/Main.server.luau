@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local GameServer = require(Shared.Sim.GameServer)
+local Dimensions = require(Shared.Sim.Dimensions)
 local SaveManager = require(Shared.Persistence.SaveManager)
 local Protocol = require(Shared.Net.Protocol)
 local DataStoreBackend = require(script.Parent.DataStoreBackend)
@@ -29,19 +30,20 @@ local C2S = remote("mclceC2S")
 local S2C = remote("mclceS2C")
 
 local backend, persistent = DataStoreBackend.new("mclce_world_v1")
-local gs = GameServer.new({
+local dims = Dimensions.new({
 	seed = Config.DEFAULT_SEED,
 	worldSize = Config.WORLD_SIZE,
 	worldId = "default",
 	backend = backend,
 	clock = os.clock,
 })
+local gs = dims.worlds.overworld
 
 -- Opening must succeed before anyone can edit, or saved edits could be lost.
 do
 	local delay = 1
 	while true do
-		local ok, err = GameServer.open(gs)
+		local ok, err = Dimensions.open(dims)
 		if ok then
 			break
 		end
@@ -51,14 +53,15 @@ do
 	end
 end
 -- debug handle for the Studio command bar / MCP: _G.mclceServer.gs
-_G.mclceServer = { gs = gs }
+_G.mclceServer = { gs = gs, dims = dims, nether = dims.worlds.nether }
 print(string.format("[mclce] world ready seed=%s persistent=%s", gs.seedText, tostring(persistent)))
 
 local ready: { [number]: boolean } = {}
 
 local function placeCharacter(player: Player)
 	local char = player.Character
-	local p = gs.players[player.UserId]
+	local world = Dimensions.serverOf(dims, player.UserId)
+	local p = world and world.players[player.UserId]
 	if not char or not p then
 		return
 	end
@@ -81,7 +84,7 @@ Players.PlayerAdded:Connect(function(player)
 		player:Kick("Could not load your data, please rejoin.")
 		return
 	end
-	GameServer.addPlayer(gs, player.UserId, player.Name, record, true)
+	Dimensions.addPlayer(dims, player.UserId, player.Name, record, true)
 	player.CharacterAdded:Connect(function()
 		task.defer(placeCharacter, player)
 	end)
@@ -91,7 +94,7 @@ Players.PlayerAdded:Connect(function(player)
 end)
 
 local function savePlayer(player: Player)
-	local rec = GameServer.removePlayer(gs, player.UserId)
+	local rec = Dimensions.removePlayer(dims, player.UserId)
 	ready[player.UserId] = nil
 	if rec then
 		for attempt = 1, 3 do
@@ -111,14 +114,14 @@ C2S.OnServerEvent:Connect(function(player, kind, ...)
 		return
 	end
 	args.n = nil
-	if kind == Protocol.C2S.HELLO and gs.players[player.UserId] then
+	if kind == Protocol.C2S.HELLO and Dimensions.serverOf(dims, player.UserId) then
 		ready[player.UserId] = true
 		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 		if root then
 			root.Anchored = false
 		end
 	end
-	GameServer.handle(gs, player.UserId, kind, args)
+	Dimensions.handle(dims, player.UserId, kind, args)
 end)
 
 local function syncPositions()
@@ -128,18 +131,33 @@ local function syncPositions()
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		if root and hum and ready[player.UserId] then
 			local feet = root.Position.Y - root.Size.Y / 2 - hum.HipHeight
-			GameServer.setPlayerPosition(gs, player.UserId, root.Position.X / BS, feet / BS, root.Position.Z / BS)
+			Dimensions.setPlayerPosition(dims, player.UserId, root.Position.X / BS, feet / BS, root.Position.Z / BS)
 		end
 	end
 end
 
 local function flush()
+	local dimsChanged = false
 	for _, player in Players:GetPlayers() do
-		for _, m in GameServer.takeOutbox(gs, player.UserId) do
+		for _, m in Dimensions.takeOutbox(dims, player.UserId) do
 			S2C:FireClient(player, m.kind, table.unpack(m.args))
-			if m.kind == Protocol.S2C.RESPAWNED then
+			if m.kind == Protocol.S2C.WELCOME then
+				-- new session or dimension change: freeze until the client meshed the ground
+				ready[player.UserId] = nil
+				dimsChanged = true
+				task.defer(placeCharacter, player)
+			elseif m.kind == Protocol.S2C.RESPAWNED then
 				task.defer(placeCharacter, player)
 			end
+		end
+	end
+	if dimsChanged then
+		local map = {}
+		for pid, dim in dims.where do
+			map[tostring(pid)] = dim
+		end
+		for _, player in Players:GetPlayers() do
+			S2C:FireClient(player, Protocol.S2C.DIMS, map)
 		end
 	end
 end
@@ -158,7 +176,7 @@ task.spawn(function()
 			acc -= TICK
 			steps += 1
 			syncPositions()
-			GameServer.tick(gs)
+			Dimensions.tick(dims)
 			flush()
 		end
 		if acc > 0.5 then
@@ -170,7 +188,7 @@ task.spawn(function()
 			task.spawn(function()
 				-- leave headroom in the budget for player saves
 				local budget = math.max(0, math.min(8, DataStoreBackend.setBudget() - 4))
-				local ok, err = pcall(GameServer.autosave, gs, budget)
+				local ok, err = pcall(Dimensions.autosave, dims, budget)
 				if not ok then
 					warn("[mclce] autosave error: " .. tostring(err))
 				end
@@ -185,12 +203,12 @@ game:BindToClose(function()
 		savePlayer(player)
 	end
 	local deadline = os.clock() + 25
-	GameServer.autosave(gs, 0)
-	while SaveManager.dirtyCount(gs.save) > 0 and os.clock() < deadline do
-		SaveManager.flush(gs.save, 4)
+	Dimensions.autosave(dims, 0)
+	while Dimensions.dirtyCount(dims) > 0 and os.clock() < deadline do
+		Dimensions.flush(dims, 4)
 		task.wait(0.5)
 	end
-	if SaveManager.dirtyCount(gs.save) > 0 then
-		warn("[mclce] shutdown with " .. SaveManager.dirtyCount(gs.save) .. " unsaved records")
+	if Dimensions.dirtyCount(dims) > 0 then
+		warn("[mclce] shutdown with " .. Dimensions.dirtyCount(dims) .. " unsaved records")
 	end
 end)

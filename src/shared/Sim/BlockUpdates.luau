@@ -12,6 +12,7 @@ local World = require("../Voxel/World")
 local BlockRegistry = require("../Blocks/BlockRegistry")
 local JavaRandom = require("../Util/JavaRandom")
 local Decorator = require("../WorldGen/Decorator")
+local Portals = require("./Portals")
 
 export type Hooks = {
 	-- break a block and drop its items (server decides drops)
@@ -90,6 +91,8 @@ local function supported(bu: BlockUpdates, x: number, y: number, z: number, stat
 		return true
 	elseif id == SNOW_LAYER then
 		return solidTop(below) or below == LEAVES or below == LEAVES2
+	elseif id == 90 then -- nether portal
+		return Portals.supported(bu.world, x, y, z, state % 16)
 	elseif id == 55 or id == 70 or id == 72 then -- wire, pressure plates
 		return solidTop(below)
 	elseif id == 64 or id == 71 then -- doors: lower on solid ground, upper on its lower half

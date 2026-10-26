@@ -32,6 +32,9 @@ Config.ATLAS_ASSET = "" -- rbxassetid of an original/licensed 16x16-tile atlas (
 Config.ATLAS_COLUMNS = 16
 
 Config.WORLD_SIZE = 864 -- Classic
+-- Nether coordinate scale (Java uses 8). The PS4 1.95 value is not verified;
+-- 3 gives a playable 288-block Nether for Classic worlds.
+Config.NETHER_SCALE = 3
 Config.DEFAULT_SEED = "mclce"
 
 return Config

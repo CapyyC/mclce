@@ -184,6 +184,52 @@ key("Up")
 key("Return")
 check(lm.Pause.Visible == false, "resume closes pause")
 
+print("[mock] nether portal: light with flint & steel, step in, arrive")
+do
+	local px, py, pz = bx, by, bz + 3
+	-- clear a corridor between the player and the frame (chest etc. from earlier steps)
+	for x = bx - 1, bx + 2 do
+		for z = bz + 1, bz + 2 do
+			SWorld.setState(gs.world, x, py - 1, z, 1 * 16)
+			for y = py, py + 3 do
+				SWorld.setState(gs.world, x, y, z, 0)
+			end
+		end
+	end
+	for i = -1, 2 do
+		SWorld.setState(gs.world, px + i, py - 1, pz, 49 * 16)
+		SWorld.setState(gs.world, px + i, py + 3, pz, 49 * 16)
+	end
+	for j = 0, 2 do
+		SWorld.setState(gs.world, px - 1, py + j, pz, 49 * 16)
+		SWorld.setState(gs.world, px + 2, py + j, pz, 49 * 16)
+		SWorld.setState(gs.world, px, py + j, pz, 0)
+		SWorld.setState(gs.world, px + 1, py + j, pz, 0)
+	end
+	sp.inventory.slots[sp.inventory.selected] = SItemStack.new(259, 1)
+	sp.inventory.version += 1
+	sp.portalCooldown = 0
+	H.run(0.4)
+	-- aim at the top face of the frame's bottom block, through the opening
+	camera.CFrame = Mock.CFrame.new(eye, Mock.Vector3.new((px + 0.5) * BS, py * BS, (pz + 0.6) * BS))
+	UIS.InputBegan:Fire(MB2, false)
+	H.run(0.1)
+	UIS.InputEnded:Fire(MB2)
+	H.run(0.3)
+	check(SWorld.getId(gs.world, px, py, pz) == 90, "portal lit by right-clicking with flint & steel")
+	-- walk into the portal (no physics in the mock: move the character)
+	root.Anchored = false
+	root.CFrame = Mock.CFrame.new((px + 0.5) * BS, py * BS + 3, (pz + 0.5) * BS)
+	H.run(5)
+	local ccw = H.sideG.client.mclceClient.cw
+	local dims = H.sideG.server.mclceServer.dims
+	check(dims.where[1001] == "nether", "server moved the player to the Nether")
+	check(ccw.dimension == "nether", "client switched to the Nether world")
+	check(ccw.world.chunkCount > 5, "nether chunks streamed: " .. ccw.world.chunkCount)
+	H.run(3)
+	check(root.Anchored == false, "re-anchored on arrival, released after HELLO")
+end
+
 print("[mock] autosave + shutdown")
 H.run(31)
 check(H.dsCalls.set > 0, "autosave wrote to DataStore (sets=" .. H.dsCalls.set .. ")")

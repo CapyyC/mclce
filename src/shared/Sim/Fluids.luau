@@ -24,6 +24,8 @@ export type Fluids = {
 	budget: number,
 	stats: { updates: number, scheduled: number },
 	suppress: boolean,
+	rate: { [string]: number },
+	drop: { [string]: number },
 }
 
 local Fluids = {}
@@ -85,8 +87,14 @@ local function isSource(state: number): boolean
 	return (id == WATER_STILL or id == LAVA_STILL) and state % 16 == 0
 end
 
-function Fluids.new(world: World.World, budget: number?): Fluids
-	local f: Fluids = { world = world, queue = {}, buckets = {}, count = 0, tick = 0, budget = budget or 1024, stats = { updates = 0, scheduled = 0 }, suppress = false }
+-- nether: lava flows like water there (every 10 ticks, 1 level per block).
+function Fluids.new(world: World.World, budget: number?, nether: boolean?): Fluids
+	local rate = table.clone(RATE)
+	local drop = table.clone(DROP)
+	if nether then
+		rate.lava, drop.lava = 10, 1
+	end
+	local f: Fluids = { world = world, queue = {}, buckets = {}, count = 0, tick = 0, budget = budget or 1024, stats = { updates = 0, scheduled = 0 }, suppress = false, rate = rate, drop = drop }
 	World.addListener(world, function(x, y, z, old, new)
 		if f.suppress then
 			return
@@ -125,12 +133,12 @@ function Fluids.notify(f: Fluids, x: number, y: number, z: number, _old: number,
 	local function wake(ax: number, ay: number, az: number)
 		local k = kindOf(World.getId(w, ax, ay, az))
 		if k then
-			Fluids.schedule(f, ax, ay, az, RATE[k])
+			Fluids.schedule(f, ax, ay, az, f.rate[k])
 		end
 	end
 	local nk = kindOf(new // 16)
 	if nk then
-		Fluids.schedule(f, x, y, z, RATE[nk])
+		Fluids.schedule(f, x, y, z, f.rate[nk])
 	end
 	wake(x, y + 1, z)
 	wake(x, y - 1, z)
@@ -228,8 +236,8 @@ local function update(f: Fluids, x: number, y: number, z: number)
 		return
 	end
 	f.stats.updates += 1
-	local drop = DROP[kind]
-	local rate = RATE[kind]
+	local drop = f.drop[kind]
+	local rate = f.rate[kind]
 	-- lava touching water hardens
 	if kind == "lava" then
 		local touching = kindOf(World.getId(w, x, y + 1, z)) == "water"

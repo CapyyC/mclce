@@ -34,6 +34,8 @@ export type ClientWorld = {
 	explosions: { { number } },
 	container: { [string]: any }?, -- open container snapshot { x, y, z, state }
 	containerChanged: boolean,
+	dimension: string,
+	resets: number, -- increments on every WELCOME (renderers drop everything)
 	clock: number,
 	worldTime: number,
 	chat: { { string } },
@@ -64,6 +66,8 @@ function ClientWorld.new(worldSize: number?): ClientWorld
 		explosions = {},
 		container = nil,
 		containerChanged = false,
+		dimension = "overworld",
+		resets = 0,
 		clock = 0,
 		worldTime = 0,
 		chat = {},
@@ -93,12 +97,26 @@ end
 function ClientWorld.apply(cw: ClientWorld, kind: number, args: { any })
 	local ok, err = pcall(function()
 		if kind == S2C.WELCOME then
+			-- a WELCOME (re)starts the session: fresh world (also on dimension change)
 			local w = args[1]
 			cw.welcome = w
 			cw.gamemode = w.gamemode or "survival"
-			if type(w.size) == "number" and w.size ~= (cw.world.maxX - cw.world.minX + 1) then
-				cw.world = World.new(w.size)
+			cw.dimension = w.dimension or "overworld"
+			cw.world = World.new(if type(w.size) == "number" then w.size else 864)
+			cw.remesh = RemeshQueue.new()
+			for id in cw.mobs do
+				cw.mobsChanged[id] = true
 			end
+			for id in cw.items do
+				cw.itemsChanged[id] = true
+			end
+			cw.mobs, cw.items = {}, {}
+			cw.container = nil
+			cw.containerChanged = true
+			cw.predicted = {}
+			cw.breaking = nil
+			cw.vitals.dead = false
+			cw.resets += 1
 		elseif kind == S2C.CHUNK then
 			local chunk = ChunkCodec.decode(args[1])
 			World.putChunk(cw.world, chunk)

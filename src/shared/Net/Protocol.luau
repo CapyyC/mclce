@@ -42,6 +42,7 @@ Protocol.S2C = {
 	RESPAWNED = 12, -- x, y, z
 	MOBS = 13, -- { spawned = {{id,type,x,y,z,yaw,health}}, moved = {{id,x,y,z,yaw}}, removed = {id}, hurt = {id} }
 	EXPLOSION = 14, -- x, y, z, power
+	DIMS = 16, -- { [tostring(userId)] = dimension } for hiding players in other dimensions
 	CONTAINER = 15, -- { x, y, z, state = BlockEntities.snapshot } or false when closed
 	ITEMS = 10, -- { spawned = {{id,x,y,z,item,meta,count}}, moved = {{id,x,y,z}}, removed = {id} }
 }

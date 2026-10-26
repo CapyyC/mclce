@@ -9,6 +9,7 @@ local Chunk = require("../Voxel/Chunk")
 local TerrainGenerator = require("./TerrainGenerator")
 local Decorator = require("./Decorator")
 local WorldSeed = require("./WorldSeed")
+local NetherGenerator = require("./NetherGenerator")
 
 export type BaseChunk = TerrainGenerator.BaseChunk
 
@@ -20,11 +21,13 @@ export type WorldGenerator = {
 	cacheHead: number,
 	capacity: number,
 	stats: { baseGenerated: number, cacheHits: number, decorated: number },
+	dimension: string, -- "overworld" | "nether"
+	nether: NetherGenerator.NetherGen?,
 }
 
 local WorldGenerator = {}
 
-type Options = { cacheCapacity: number?, biomeScale: number? }
+type Options = { cacheCapacity: number?, biomeScale: number?, dimension: string? }
 
 function WorldGenerator.new(seed: WorldSeed.WorldSeed, opts: Options?): WorldGenerator
 	local o: Options = opts or {} :: Options
@@ -36,6 +39,8 @@ function WorldGenerator.new(seed: WorldSeed.WorldSeed, opts: Options?): WorldGen
 		cacheHead = 1,
 		capacity = o.cacheCapacity or 128,
 		stats = { baseGenerated = 0, cacheHits = 0, decorated = 0 },
+		dimension = o.dimension or "overworld",
+		nether = if o.dimension == "nether" then NetherGenerator.new(seed) else nil,
 	}
 end
 
@@ -63,6 +68,10 @@ function WorldGenerator.getBase(gen: WorldGenerator, cx: number, cz: number): Ba
 end
 
 function WorldGenerator.generate(gen: WorldGenerator, cx: number, cz: number): Chunk.Chunk
+	if gen.nether then
+		gen.stats.decorated += 1
+		return NetherGenerator.generate(gen.nether, cx, cz)
+	end
 	local base = WorldGenerator.getBase(gen, cx, cz)
 	local c = Chunk.clone(base.chunk)
 	Decorator.decorate(gen.seed, c, function(x, z)

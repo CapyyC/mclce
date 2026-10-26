@@ -188,6 +188,16 @@ function ChunkScheduler.isLoaded(s: Scheduler, cx: number, cz: number): boolean
 	return s.loaded[Coords.chunkKey(cx, cz)] == true
 end
 
+-- Records a chunk loaded outside the scheduler (e.g. the spawn chunk).
+function ChunkScheduler.markLoaded(s: Scheduler, cx: number, cz: number)
+	local k = Coords.chunkKey(cx, cz)
+	if not s.loaded[k] then
+		s.loaded[k] = true
+		s.loadedCount += 1
+		s.queued[k] = nil
+	end
+end
+
 -- Marks a chunk unloaded without invoking callbacks (e.g. its owner evicted it).
 function ChunkScheduler.forget(s: Scheduler, cx: number, cz: number)
 	local k = Coords.chunkKey(cx, cz)

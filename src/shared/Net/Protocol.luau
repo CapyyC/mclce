@@ -33,6 +33,7 @@ Protocol.S2C = {
 	TIME = 7, -- worldTime ticks
 	BREAK_REJECTED = 8, -- x, y, z, current state
 	CHAT = 9, -- name, text
+	ITEMS = 10, -- { spawned = {{id,x,y,z,item,meta,count}}, moved = {{id,x,y,z}}, removed = {id} }
 }
 
 export type Message = { kind: number, [string]: any }

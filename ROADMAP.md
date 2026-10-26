@@ -1,36 +1,37 @@
 # Roadmap
 
-Milestones follow the mission brief (A–H). `[x]` done & tested, `[~]` partial, `[ ]` not started.
+`[x]` done & CLI-tested, `[~]` partial / unverified in Roblox, `[ ]` not started.
 
 ## A — Audit & tooling
-- [x] Audit (empty repo, no source → clean-room) — see PROJECT_STATUS.md
+- [x] Audit (empty repo, no source → clean-room) — PROJECT_STATUS.md
 - [x] Luau CLI build script, test runner, analyzer, bench harness, CI
 
 ## B — Core voxel primitives
-- [x] Coords, chunk keys, section indexing
-- [x] Block registry / state packing
-- [x] Chunk storage, World container, border
+- [x] Coords, chunk keys, section indexing, block registry/state packing, chunk storage, world border
 
 ## C — Meshing
-- [ ] Face culling + greedy quads per section (opaque / cutout / translucent)
-- [ ] Greedy box decomposition for Part renderer
-- [ ] Neighbour-aware invalidation + rebuild queue
+- [x] Face culling + greedy quads per section (opaque / cutout / translucent)
+- [x] Greedy box decomposition for Part renderer
+- [x] Neighbour-aware invalidation + bounded rebuild queue
+- [ ] Faster quad mesher (precomputed face masks) — ~1 ms/section today
 
 ## D — Playable prototype
-- [ ] Deterministic terrain (Java-compatible LCG + Perlin, approximate shaping)
-- [ ] Raycast targeting, break/place with server validation
-- [ ] Roblox server/client bootstrap, chunk renderer, input
+- [x] Deterministic terrain, caves, ores, trees (approximate shaping)
+- [x] Raycast targeting, validated break/place, item drops
+- [~] Roblox server/client bootstrap, Part renderer, HUD, input (unverified in Studio)
 
 ## E — Streaming & saving
-- [ ] Player-centred chunk scheduler with budgets & cancellation
-- [ ] Chunk codec + DataStore persistence (batching, retries, schema version)
+- [x] Scheduler, codec, SaveManager, failure recovery tests
+- [~] DataStore adapter, autosave, BindToClose (unverified)
 
 ## F — Survival
-- [ ] Inventory, item stacks, drops, crafting
-- [ ] Mining time, tools; health/hunger; day/night; basic mobs
+- [x] Inventory, drops, crafting (Legacy list UI model), smelting tables, mining times, tools
+- [x] Health/hunger/fall damage/death/respawn, eating
+- [~] Day/night (time sync + Lighting.ClockTime; no mob-spawn coupling yet)
+- [ ] Furnace block entity, chests, armour, combat, mobs
 
 ## G — Legacy fidelity
-- [ ] Biomes, structures, fluids, lighting, redstone, Legacy UI
+- [ ] Fluids, lighting, redstone, structures, Nether/End, Legacy UI screens, tutorial/minigames
 
 ## H — Stability
-- [ ] Regression suite, perf budgets, multiplayer validation
+- [ ] Studio perf measurements, multiplayer soak, Roblox mock harness for glue

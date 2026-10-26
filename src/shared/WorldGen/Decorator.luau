@@ -13,6 +13,7 @@
 -- shapes are simplified approximations.
 
 local Chunk = require("../Voxel/Chunk")
+local World = require("../Voxel/World")
 local Biomes = require("./Biomes")
 local Hash = require("../Util/Hash")
 local JavaRandom = require("../Util/JavaRandom")
@@ -41,33 +42,39 @@ local ORES: { { number } } = {
 }
 local LAPIS = 21 * 16
 
--- A write sink restricted to the target chunk.
-type Sink = { chunk: Chunk.Chunk, bx: number, bz: number }
+-- A write sink: either restricted to one target chunk (generation) or the
+-- whole World (sapling growth at runtime).
+type Sink = { chunk: Chunk.Chunk, bx: number, bz: number, world: World.World? }
+
+local function allowed(cur: number, rule: string): boolean
+	if rule == "stone" then
+		return cur == STONE
+	elseif rule == "air" or rule == "leaves" then
+		return cur == AIR or cur == SNOW_LAYER or cur == TALLGRASS
+	elseif rule == "log" then
+		return cur == AIR or cur // 16 == 18 or cur // 16 == 161 or cur == SNOW_LAYER or cur == TALLGRASS or cur // 16 == 6
+	end
+	return true
+end
 
 local function put(sink: Sink, x: number, y: number, z: number, st: number, rule: string)
-	local lx, lz = x - sink.bx, z - sink.bz
-	if lx < 0 or lx > 15 or lz < 0 or lz > 15 or y < 1 or y > 255 then
+	if y < 1 or y > 255 then
 		return
 	end
-	local cur = Chunk.getState(sink.chunk, lx, y, lz)
-	if rule == "stone" then
-		if cur ~= STONE then
-			return
+	local w = sink.world
+	if w then
+		if allowed(World.getState(w, x, y, z), rule) then
+			World.setState(w, x, y, z, st)
 		end
-	elseif rule == "air" then
-		if cur ~= AIR and cur ~= SNOW_LAYER and cur ~= TALLGRASS then
-			return
-		end
-	elseif rule == "leaves" then
-		if cur ~= AIR and cur ~= SNOW_LAYER and cur ~= TALLGRASS then
-			return
-		end
-	elseif rule == "log" then
-		if cur ~= AIR and cur ~= LEAVES and cur ~= LEAVES2 and cur ~= SNOW_LAYER and cur ~= TALLGRASS then
-			return
-		end
+		return
 	end
-	Chunk.setState(sink.chunk, lx, y, lz, st, false)
+	local lx, lz = x - sink.bx, z - sink.bz
+	if lx < 0 or lx > 15 or lz < 0 or lz > 15 then
+		return
+	end
+	if allowed(Chunk.getState(sink.chunk, lx, y, lz), rule) then
+		Chunk.setState(sink.chunk, lx, y, lz, st, false)
+	end
 end
 
 local function vein(sink: Sink, rng: JavaRandom.JavaRandom, st: number, size: number, x: number, y: number, z: number)
@@ -317,6 +324,23 @@ local function sourceFeatures(seed: { hi: number, lo: number }, src: BaseChunk, 
 				end
 			end
 		end)
+	end
+end
+
+-- Grows a tree into a live World (sapling growth). kind: "oak" | "birch" |
+-- "spruce" | "jungle" | "acacia". Trunk replaces the sapling.
+function Decorator.growTree(world: World.World, kind: string, rng: JavaRandom.JavaRandom, x: number, y: number, z: number)
+	local sink: Sink = { chunk = nil :: any, bx = 0, bz = 0, world = world }
+	if kind == "spruce" then
+		spruce(sink, rng, x, y, z)
+	elseif kind == "birch" then
+		oak(sink, rng, x, y, z, LOG + 2, LEAVES + 2, 5)
+	elseif kind == "jungle" then
+		oak(sink, rng, x, y, z, LOG + 3, LEAVES + 3, 4 + rng:nextInt(7))
+	elseif kind == "acacia" then
+		oak(sink, rng, x, y, z, LOG2, LEAVES2, 5)
+	else
+		oak(sink, rng, x, y, z, LOG, LEAVES, 4)
 	end
 end
 

@@ -84,6 +84,12 @@ return function(t)
 			GameServer.handle(gs, 1, C.FINISH_BREAK, { x, y + 1, z })
 			t.eq(World.getId(gs.world, x, y + 1, z), 0)
 			for _ = 1, 40 do
+				-- follow the drop (items scatter on spawn)
+				for _, e in gs.items.list do
+					if e.stack.id == B.DIRT then
+						GameServer.setPlayerPosition(gs, 1, e.x, y + 1, e.z)
+					end
+				end
 				GameServer.tick(gs)
 			end
 			t.eq(Inventory.count(p.inventory, B.DIRT), 1, "dirt picked up")

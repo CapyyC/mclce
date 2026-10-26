@@ -142,6 +142,7 @@ add(54, "chest", cube(2.5, { 164, 116, 42 }, "WoodPlanks", { all = "chest" }, { 
 add(56, "diamond_ore", cube(3.0, { 129, 140, 143 }, "Slate", { all = "diamond_ore" }, pick(2)))
 add(57, "diamond_block", cube(5.0, { 98, 219, 214 }, "Ice", { all = "diamond_block" }, pick(2)))
 add(58, "crafting_table", cube(2.5, { 120, 73, 42 }, "WoodPlanks", { top = "crafting_table_top", bottom = "planks_oak", side = "crafting_table_side" }, { tool = "axe", flammable = true }))
+add(59, "wheat", plant({ 200, 180, 60 }, "wheat_stage_7", { flammable = false, drops = 0 }))
 add(60, "farmland", cube(0.6, { 115, 74, 44 }, "Ground", { top = "farmland_dry", bottom = "dirt", side = "dirt" }, { tool = "shovel", drops = 3 }))
 add(61, "furnace", cube(3.5, { 110, 110, 110 }, "Cobblestone", { top = "furnace_top", bottom = "furnace_top", side = "furnace_side", front = "furnace_front_off" }, PICK))
 add(62, "lit_furnace", cube(3.5, { 110, 110, 110 }, "Cobblestone", { top = "furnace_top", bottom = "furnace_top", side = "furnace_side", front = "furnace_front_on" }, { tool = "pickaxe", needsTool = true, light = 13, drops = 61 }))

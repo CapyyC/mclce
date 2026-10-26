@@ -54,6 +54,7 @@ add("snow", "structures", 2, { 80, 1 }, { { id = 332, count = 4 } })
 add("clay", "structures", 2, { 82, 1 }, { { id = 337, count = 4 } })
 add("bowl", "food", 3, { 281, 4 }, { { id = PLANKS, count = 3 } })
 add("bread", "food", 3, { 297, 1 }, { { id = 296, count = 3 } })
+add("bucket", "tools", 3, { 325, 1 }, { { id = IRON, count = 3 } })
 add("mushroom_stew", "food", 3, { 282, 1 }, { { id = 39, count = 1 }, { id = 40, count = 1 }, { id = 281, count = 1 } })
 
 type ToolMat = { name: string, mat: number, ids: { number } }

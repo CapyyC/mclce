@@ -133,6 +133,16 @@ function Mining.drops(state: number, held: ItemStack?, rng: JavaRandom.JavaRando
 		return {}
 	elseif name == "deadbush" then
 		return if tool == "shears" then { ItemStack.new(id, 1) } else {}
+	elseif name == "wheat" then
+		if meta >= 7 then
+			local out = { ItemStack.new(296, 1) }
+			local seeds = rng:nextInt(4)
+			if seeds > 0 then
+				table.insert(out, ItemStack.new(295, seeds))
+			end
+			return out
+		end
+		return { ItemStack.new(295, 1) }
 	elseif name == "reeds" then
 		return { ItemStack.new(338, 1) }
 	elseif name == "snow_layer" then

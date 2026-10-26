@@ -225,13 +225,22 @@ function ClientWorld.held(cw: ClientWorld): ItemStack.ItemStack?
 end
 
 -- Raycast against the replica. Returns the hit (solid or targetable block).
+-- With an empty bucket in hand, liquid source blocks are targetable too.
 function ClientWorld.target(cw: ClientWorld, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, reach: number): VoxelRaycast.Hit?
 	local world = cw.world
+	local held = ClientWorld.held(cw)
+	local liquids = held ~= nil and held.id == 325
 	return VoxelRaycast.cast(function(x, y, z)
 		return World.getState(world, x, y, z)
 	end, ox, oy, oz, dx, dy, dz, reach, function(st)
 		local id = st // 16
-		return id ~= 0 and not BlockRegistry.isLiquid(id)
+		if id == 0 then
+			return false
+		end
+		if BlockRegistry.isLiquid(id) then
+			return liquids and st % 16 == 0
+		end
+		return true
 	end)
 end
 

@@ -32,6 +32,7 @@ local LightEngine = require("../Voxel/LightEngine")
 local Mobs = require("./Mobs")
 local Time = require("./Time")
 local BlockEntities = require("./BlockEntities")
+local BlockUpdates = require("./BlockUpdates")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -89,6 +90,8 @@ export type GameServer = {
 	mobs: Mobs.Mobs,
 	mobsEnabled: boolean,
 	furnaces: { [number]: { number } }, -- position key -> {x, y, z}
+	updates: BlockUpdates.BlockUpdates,
+	randomTickRadius: number,
 	rng: JavaRandom.JavaRandom,
 	tickCount: number,
 	worldTime: number,
@@ -138,6 +141,8 @@ function GameServer.new(opts: Options): GameServer
 		mobs = Mobs.new(seed.lo + 7),
 		mobsEnabled = opts.mobs ~= false,
 		furnaces = {},
+		updates = nil :: any,
+		randomTickRadius = 4,
 		rng = JavaRandom.new(seed.lo),
 		tickCount = 0,
 		worldTime = 0,
@@ -160,9 +165,28 @@ function GameServer.new(opts: Options): GameServer
 		end,
 	}, gs.viewRadius + 1, { hysteresis = 2, maxLoaded = Config.MAX_LOADED_CHUNKS })
 	gs.fluids = Fluids.new(world, 2048)
+	gs.updates = BlockUpdates.new(world, {
+		popBlock = function(x, y, z)
+			local st = World.getState(world, x, y, z)
+			World.setState(world, x, y, z, 0)
+			for _, drop in Mining.drops(st, nil, gs.rng) do
+				ItemEntities.spawn(gs.items, x + 0.5, y + 0.3, z + 0.5, drop)
+			end
+		end,
+		skyLight = function(x, y, z)
+			return LightEngine.sky(gs.light, x, y, z)
+		end,
+		blockLight = function(x, y, z)
+			return LightEngine.block(gs.light, x, y, z)
+		end,
+		skyDarken = function()
+			return Time.skyDarken(gs.worldTime)
+		end,
+	}, seed.lo + 13)
 	World.addListener(world, function(x, y, z, old, new)
 		LightEngine.onBlockChanged(gs.light, x, y, z, old // 16, new // 16)
 		GameServer._blockEntityChange(gs, x, y, z, old // 16, new // 16)
+		BlockUpdates.onChange(gs.updates, x, y, z)
 		local p = gs.pendingChanges
 		local n = #p
 		p[n + 1], p[n + 2], p[n + 3], p[n + 4] = x, y, z, new
@@ -441,6 +465,77 @@ local function doBreak(gs: GameServer, p: Player, x: number, y: number, z: numbe
 	end
 end
 
+-- Items with special "use" behaviour. Returns true when the use was handled
+-- (successfully or rejected) so normal placement is skipped.
+function GameServer._useItem(gs: GameServer, p: Player, held: ItemStack.ItemStack, def: ItemRegistry.ItemDef, tx: number, ty: number, tz: number, face: number): boolean
+	local world = gs.world
+	local target = World.getState(world, tx, ty, tz)
+	local tid = target // 16
+	local survival = p.gamemode == "survival"
+	local function consume()
+		if survival then
+			Inventory.consumeHeld(p.inventory, 1)
+		end
+	end
+	local function replaceHeld(id: number)
+		if survival then
+			local inv = p.inventory
+			if held.count > 1 then
+				Inventory.consumeHeld(inv, 1)
+				if Inventory.add(inv, ItemStack.new(id, 1)) > 0 then
+					ItemEntities.spawn(gs.items, p.x, p.y + 1, p.z, ItemStack.new(id, 1))
+				end
+			else
+				inv.slots[inv.selected] = ItemStack.new(id, 1)
+				inv.version += 1
+			end
+		end
+	end
+	if def.tool == "hoe" then
+		if face ~= 3 and (tid == 2 or tid == 3) and World.getId(world, tx, ty + 1, tz) == 0 then
+			World.setState(world, tx, ty, tz, 60 * 16)
+			if survival and def.durability then
+				local nd = held.damage + 1
+				p.inventory.slots[p.inventory.selected] = if nd >= def.durability then nil else ItemStack.new(held.id, 1, held.meta, nd)
+				p.inventory.version += 1
+			end
+		else
+			reject(gs, p)
+		end
+		return true
+	elseif held.id == 295 then -- seeds
+		if face == 2 and tid == 60 and World.getId(world, tx, ty + 1, tz) == 0 then
+			World.setState(world, tx, ty + 1, tz, 59 * 16)
+			consume()
+		else
+			reject(gs, p)
+		end
+		return true
+	elseif held.id == 325 then -- empty bucket: scoop a source block
+		if (tid == 9 or tid == 11) and target % 16 == 0 then
+			World.setState(world, tx, ty, tz, 0)
+			replaceHeld(if tid == 9 then 326 else 327)
+		else
+			reject(gs, p)
+		end
+		return true
+	elseif held.id == 326 or held.id == 327 then
+		local x, y, z = tx, ty, tz
+		if not BlockRegistry.isReplaceable(tid) or BlockRegistry.isLiquid(tid) and target % 16 == 0 then
+			x, y, z = tx + Faces.DX[face], ty + Faces.DY[face], tz + Faces.DZ[face]
+		end
+		local cur = World.getId(world, x, y, z)
+		if y >= 0 and y <= 255 and World.isLoaded(world, x, z) and World.inBorder(world, x, z) and (BlockRegistry.isReplaceable(cur) and not (BlockRegistry.isLiquid(cur) and World.getState(world, x, y, z) % 16 == 0)) then
+			World.setState(world, x, y, z, (if held.id == 326 then 9 else 11) * 16)
+			replaceHeld(325)
+		else
+			reject(gs, p)
+		end
+		return true
+	end
+	return false
+end
+
 local function handleStartBreak(gs: GameServer, p: Player, m: Protocol.Message)
 	local x, y, z = m.x, m.y, m.z
 	if not canEdit(gs, p, x, y, z) then
@@ -503,6 +598,9 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 	end
 	local held = Inventory.held(p.inventory)
 	local def = if held then ItemRegistry.get(held.id) else nil
+	if held and def and GameServer._useItem(gs, p, held, def, tx, ty, tz, face) then
+		return
+	end
 	if held == nil or def == nil or def.block == nil then
 		return reject(gs, p)
 	end
@@ -547,8 +645,17 @@ local function handlePlace(gs: GameServer, p: Player, m: Protocol.Message)
 			meta = if dz > 0 then 3 else 2
 		end
 	end
-	if blockId == 17 or blockId == 162 or blockId == 5 or blockId == 35 or blockId == 1 or blockId == 6 or blockId == 18 then
+	if blockId == 17 or blockId == 162 or blockId == 5 or blockId == 35 or blockId == 1 or blockId == 6 then
 		meta = held.meta % 16
+	elseif blockId == 18 or blockId == 161 then
+		meta = held.meta % 4 + 4 -- player-placed leaves never decay
+	elseif blockId == 50 then
+		-- torch attaches to the clicked face
+		local TORCH_META = { [0] = 1, 2, 5, -1, 3, 4 }
+		meta = TORCH_META[face]
+		if meta < 0 then
+			return reject(gs, p, x, y, z)
+		end
 	end
 	World.setState(gs.world, x, y, z, blockId * 16 + meta)
 	count(gs, "blocksPlaced")
@@ -1083,6 +1190,23 @@ function GameServer.tick(gs: GameServer)
 	ChunkScheduler.step(gs.scheduler, gs.genBudget)
 	if gs.tickCount % 20 == 0 and #viewers > 0 then
 		ChunkScheduler.collect(gs.scheduler)
+	end
+	-- random ticks near players
+	if next(gs.players) then
+		local near: { [number]: any } = {}
+		local r = gs.randomTickRadius
+		for _, p in gs.players do
+			local pcx, pcz = math.floor(p.x) // 16, math.floor(p.z) // 16
+			for dz = -r, r do
+				for dx = -r, r do
+					local c = World.getChunk(gs.world, pcx + dx, pcz + dz)
+					if c then
+						near[Coords.chunkKey(c.cx, c.cz)] = c
+					end
+				end
+			end
+		end
+		BlockUpdates.tickChunks(gs.updates, near)
 	end
 	-- fluids, furnaces
 	Fluids.step(gs.fluids)

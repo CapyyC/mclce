@@ -183,6 +183,21 @@ function Chunk.memoryBytes(chunk: Chunk): number
 	return n
 end
 
+-- Deep copy (section buffers are copied, not shared).
+function Chunk.clone(chunk: Chunk): Chunk
+	local c = Chunk.new(chunk.cx, chunk.cz)
+	for si, s in chunk.sections do
+		local b = buffer.create(SECTION_BYTES)
+		buffer.copy(b, 0, s.states)
+		c.sections[si] = { states = b, nonAir = s.nonAir }
+	end
+	buffer.copy(c.heightmap, 0, chunk.heightmap)
+	table.move(chunk.sectionVersion, 1, #chunk.sectionVersion, 1, c.sectionVersion)
+	c.dirty = chunk.dirty
+	c.generated = chunk.generated
+	return c
+end
+
 Chunk.SECTION_BYTES = SECTION_BYTES
 
 return Chunk

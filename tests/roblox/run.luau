@@ -188,6 +188,38 @@ key("Up")
 key("Return")
 check(lm.Pause.Visible == false, "resume closes pause")
 
+print("[mock] inventory screen: equip a helmet with the d-pad")
+do
+	sp.inventory.slots[sp.inventory.selected] = nil
+	SInventory.add(sp.inventory, SItemStack.new(306, 1)) -- iron helmet -> lands in a hotbar slot
+	sp.inventory.version += 1
+	H.run(0.3)
+	local helmetSlot
+	for i = 1, 36 do
+		if sp.inventory.slots[i] and sp.inventory.slots[i].id == 306 then
+			helmetSlot = i
+		end
+	end
+	key("I")
+	local inv = player.PlayerGui:FindFirstChild("mclceInventory")
+	check(inv ~= nil and inv.Enabled, "inventory screen opens with I")
+	-- click the helmet's slot, then the helmet armour slot
+	local function slotButton(id)
+		for _, d in inv:GetDescendants() do
+			if d.Name == "Slot" .. tostring(id) then
+				return d
+			end
+		end
+	end
+	slotButton(helmetSlot).Activated:Fire()
+	H.run(0.2)
+	slotButton(37).Activated:Fire()
+	H.run(0.3)
+	check(sp.inventory.slots[37] and sp.inventory.slots[37].id == 306, "helmet equipped")
+	key("I")
+	check(inv.Enabled == false, "I closes the inventory")
+end
+
 print("[mock] nether portal: light with flint & steel, step in, arrive")
 do
 	local px, py, pz = bx, by, bz + 3

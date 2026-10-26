@@ -34,6 +34,22 @@ function FocusGrid.inventoryLayout(containerSlots: number?, columns: number?): {
 	return out
 end
 
+-- Player inventory screen: 4 armour slots (ids 37..40) in a column on the
+-- left above the storage rows, then storage and hotbar.
+function FocusGrid.playerLayout(): { Slot }
+	local out: { Slot } = {}
+	for i = 0, 3 do
+		table.insert(out, { id = 37 + i, col = 0, row = i })
+	end
+	for i = 10, 36 do
+		table.insert(out, { id = i, col = (i - 10) % 9, row = 4 + (i - 10) // 9 })
+	end
+	for i = 1, 9 do
+		table.insert(out, { id = i, col = i - 1, row = 7 })
+	end
+	return out
+end
+
 function FocusGrid.focused(g: Grid): Slot?
 	return g.slots[g.focus]
 end

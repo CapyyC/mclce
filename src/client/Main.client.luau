@@ -21,6 +21,7 @@ local LegacyMenus = require(script.Parent.LegacyMenus)
 local MobRenderer = require(script.Parent.MobRenderer)
 local ContainerMenu = require(script.Parent.ContainerMenu)
 local WeatherFx = require(script.Parent.WeatherFx)
+local InventoryScreen = require(script.Parent.InventoryScreen)
 
 local BS = Config.BLOCK_SIZE
 local C2S_KIND, S2C_KIND = Protocol.C2S, Protocol.S2C
@@ -41,6 +42,9 @@ local mobRenderer = MobRenderer.new(cw, workspace)
 local weatherFx = WeatherFx.new(workspace)
 local hud = Hud.new(player:WaitForChild("PlayerGui"))
 local nearCraftingTable
+local inventoryScreen = InventoryScreen.new(player:WaitForChild("PlayerGui"), function(slot, button)
+	ClientWorld.inventoryClick(cw, slot, button)
+end)
 local menus = LegacyMenus.new(player.PlayerGui, {
 	inventory = function()
 		return cw.inventory
@@ -58,8 +62,14 @@ local menus = LegacyMenus.new(player.PlayerGui, {
 		return 2
 	end,
 	event = function(ev)
-		if ev == "close:crafting" then
-			table.insert(cw.outgoing, { C2S_KIND.CLOSE_CONTAINER })
+		if ev == "close:crafting" or ev == "close:inventory" then
+			table.insert(cw.outgoing, { C2S_KIND.CLOSE_CONTAINER }) -- returns the cursor stack
+		end
+		if ev == "open:inventory" then
+			inventoryScreen:setOpen(true)
+			inventoryScreen:render(cw.inventory)
+		elseif ev == "close:inventory" then
+			inventoryScreen:setOpen(false)
 		end
 	end,
 })
@@ -108,6 +118,9 @@ S2C.OnClientEvent:Connect(function(kind, ...)
 		renderer:dropChunk(...)
 	elseif kind == S2C_KIND.INVENTORY then
 		menus:onInventoryChanged()
+		if inventoryScreen.gui.Enabled then
+			inventoryScreen:render(cw.inventory)
+		end
 	end
 	if kind == S2C_KIND.CONTAINER or (kind == S2C_KIND.INVENTORY and cw.container) then
 		containerMenu:render(cw.container, cw.inventory)
@@ -205,7 +218,13 @@ RunService.RenderStepped:Connect(function(dt)
 		if cw.container and (act == "back" or act == "crafting") then
 			ClientWorld.closeContainer(cw)
 		elseif not cw.container then
-			menus:action(act)
+			local inInventory = not menus:isGameplay() and menus.menu.stack[#menus.menu.stack].name == "inventory"
+			if inInventory and (act == "up" or act == "down" or act == "left" or act == "right" or act == "confirm") then
+				inventoryScreen:action(act)
+				inventoryScreen:render(cw.inventory)
+			else
+				menus:action(act)
+			end
 		end
 	end
 	table.clear(Input.menuQueue)

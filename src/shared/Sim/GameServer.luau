@@ -27,6 +27,7 @@ local ItemEntities = require("./ItemEntities")
 local JavaRandom = require("../Util/JavaRandom")
 local Faces = require("../Mesh/Faces")
 local Survival = require("./Survival")
+local Fluids = require("./Fluids")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -76,6 +77,7 @@ export type GameServer = {
 	outbox: { [number]: { Outgoing } },
 	pendingChanges: { number }, -- flat x, y, z, state
 	items: ItemEntities.ItemEntities,
+	fluids: Fluids.Fluids,
 	rng: JavaRandom.JavaRandom,
 	tickCount: number,
 	worldTime: number,
@@ -120,6 +122,7 @@ function GameServer.new(opts: Options): GameServer
 		outbox = {},
 		pendingChanges = {},
 		items = ItemEntities.new(),
+		fluids = nil :: any,
 		rng = JavaRandom.new(seed.lo),
 		tickCount = 0,
 		worldTime = 0,
@@ -141,6 +144,7 @@ function GameServer.new(opts: Options): GameServer
 			return World.chunkInBorder(world, cx, cz) and gs.failedLoads[Coords.chunkKey(cx, cz)] == nil
 		end,
 	}, gs.viewRadius + 1, { hysteresis = 2, maxLoaded = Config.MAX_LOADED_CHUNKS })
+	gs.fluids = Fluids.new(world, 2048)
 	World.addListener(world, function(x, y, z, _old, new)
 		local p = gs.pendingChanges
 		local n = #p
@@ -780,6 +784,8 @@ function GameServer.tick(gs: GameServer)
 	if gs.tickCount % 20 == 0 and #viewers > 0 then
 		ChunkScheduler.collect(gs.scheduler)
 	end
+	-- fluids
+	Fluids.step(gs.fluids)
 	-- entities
 	local world = gs.world
 	ItemEntities.tick(gs.items, function(x, y, z)

@@ -90,6 +90,20 @@ return function(t)
 			t.eq(p.vitals.food, 15)
 			t.eq(Inventory.count(p.inventory, 297), 1)
 		end)
+		t.test("breaking a block beside water lets it flow in", function()
+			local gs, p = setup()
+			p.gamemode = "creative"
+			World.setState(gs.world, 2, 81, 0, B.STONE * 16)
+			World.setState(gs.world, 3, 81, 0, 9 * 16) -- water source behind the stone
+			for _ = 1, 10 do
+				GameServer.tick(gs)
+			end
+			GameServer.handle(gs, 1, C.START_BREAK, { 2, 81, 0 })
+			for _ = 1, 20 do
+				GameServer.tick(gs)
+			end
+			t.eq(World.getId(gs.world, 2, 81, 0), 8, "flowing water filled the gap")
+		end)
 		t.test("walking costs exhaustion, eventually hunger", function()
 			local gs, p = setup()
 			p.vitals.saturation = 0

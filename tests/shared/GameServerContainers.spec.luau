@@ -11,7 +11,7 @@ local C, S = Protocol.C2S, Protocol.S2C
 
 local function setup(opts)
 	opts = opts or {}
-	local gs = GameServer.new({ seed = "containers", viewRadius = 2, genBudget = 50, sendBudget = 50, mobs = false, backend = opts.backend, worldId = "w" })
+	local gs = GameServer.new({ seed = "containers", viewRadius = 2, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 1e9, mobs = false, backend = opts.backend, worldId = "w" })
 	GameServer.open(gs)
 	local p = GameServer.addPlayer(gs, 1, "a", opts.record)
 	GameServer.tick(gs)

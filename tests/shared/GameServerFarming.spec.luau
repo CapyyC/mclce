@@ -8,7 +8,7 @@ local B = require("../../src/shared/Blocks/BlockRegistry")
 local C = Protocol.C2S
 
 local function setup()
-	local gs = GameServer.new({ seed = "farm", viewRadius = 2, genBudget = 50, sendBudget = 50, mobs = false })
+	local gs = GameServer.new({ seed = "farm", viewRadius = 2, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 1e9, mobs = false })
 	local p = GameServer.addPlayer(gs, 1, "a")
 	GameServer.tick(gs)
 	gs.randomTickRadius = -1 -- deterministic: no random ticks during these tests

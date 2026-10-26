@@ -10,7 +10,7 @@ local B = require("../../src/shared/Blocks/BlockRegistry")
 local C = Protocol.C2S
 
 local function setup()
-	local gs = GameServer.new({ seed = "beds", viewRadius = 2, genBudget = 50, sendBudget = 50, mobs = false })
+	local gs = GameServer.new({ seed = "beds", viewRadius = 2, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 1e9, mobs = false })
 	local p = GameServer.addPlayer(gs, 1, "a")
 	GameServer.tick(gs)
 	gs.randomTickRadius = -1
@@ -72,7 +72,7 @@ return function(t)
 			t.eq(World.getId(gs.world, 3, 81, 0), 0)
 		end)
 		t.test("beds explode in the Nether", function()
-			local gs = GameServer.new({ seed = "beds", viewRadius = 1, genBudget = 50, sendBudget = 50, mobs = false, dimension = "nether" })
+			local gs = GameServer.new({ seed = "beds", viewRadius = 1, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 1e9, mobs = false, dimension = "nether" })
 			local p = GameServer.addPlayer(gs, 1, "a")
 			GameServer.tick(gs)
 			local x, y, z = math.floor(p.x), math.floor(p.y), math.floor(p.z)

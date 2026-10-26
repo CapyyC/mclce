@@ -10,7 +10,7 @@ local B = require("../../src/shared/Blocks/BlockRegistry")
 local C, S = Protocol.C2S, Protocol.S2C
 
 local function setup()
-	local gs = GameServer.new({ seed = "mobs", viewRadius = 2, genBudget = 50, sendBudget = 50, mobs = false })
+	local gs = GameServer.new({ seed = "mobs", viewRadius = 2, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 1e9, mobs = false })
 	local p = GameServer.addPlayer(gs, 1, "a")
 	GameServer.tick(gs)
 	for x = -8, 8 do
@@ -159,7 +159,7 @@ return function(t)
 			t.truthy(e.cook >= 190, "delay reset")
 		end)
 		t.test("hostiles spawn in the dark around players when enabled", function()
-			local gs = GameServer.new({ seed = "mobs", viewRadius = 3, genBudget = 50, sendBudget = 50 })
+			local gs = GameServer.new({ seed = "mobs", viewRadius = 3, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 1e9 })
 			GameServer.addPlayer(gs, 1, "a")
 			gs.worldTime = 17000
 			for _ = 1, 400 do

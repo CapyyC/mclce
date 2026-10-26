@@ -8,7 +8,7 @@ local B = require("../../src/shared/Blocks/BlockRegistry")
 local C, S = Protocol.C2S, Protocol.S2C
 
 local function setup()
-	local gs = GameServer.new({ seed = "survival", viewRadius = 1, genBudget = 50, sendBudget = 50, mobs = false })
+	local gs = GameServer.new({ seed = "survival", viewRadius = 1, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 1e9, mobs = false })
 	local p = GameServer.addPlayer(gs, 1, "a")
 	GameServer.tick(gs)
 	-- platform at y=80 around origin, clear sky above

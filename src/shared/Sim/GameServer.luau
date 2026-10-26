@@ -81,6 +81,7 @@ export type Options = {
 	viewRadius: number?,
 	genBudget: number?,
 	sendBudget: number?,
+	sendBytesPerSecond: number?,
 	mobs: boolean?, -- natural mob spawning (default on)
 	asyncGenerate: ((cx: number, cz: number, dimension: string, seedText: string) -> ())?, -- off-thread generation hook
 	dimension: string?, -- "overworld" (default) | "nether"
@@ -114,6 +115,7 @@ export type GameServer = {
 	worldTime: number,
 	viewRadius: number,
 	sendBudget: number,
+	sendBytesPerTick: number,
 	genBudget: number,
 	failedLoads: { [number]: number }, -- chunk key -> retry tick
 	clock: () -> number,
@@ -171,6 +173,7 @@ function GameServer.new(opts: Options): GameServer
 		worldTime = 0,
 		viewRadius = opts.viewRadius or Config.SERVER_VIEW_RADIUS,
 		sendBudget = opts.sendBudget or Config.SEND_BUDGET_PER_TICK,
+		sendBytesPerTick = (opts.sendBytesPerSecond or Config.SEND_BYTES_PER_SECOND) / Config.TICK_RATE,
 		genBudget = opts.genBudget or Config.GEN_BUDGET_PER_TICK,
 		failedLoads = {},
 		clock = clock,
@@ -1509,13 +1512,21 @@ local function replicateChunks(gs: GameServer, p: Player)
 		end
 		return a < b
 	end)
+	local byteCap = gs.sendBytesPerTick
+	local bytes = 0
 	for i = 1, math.min(#cand, gs.sendBudget) do
+		if i > 1 and bytes >= byteCap then
+			break
+		end
 		local k = cand[i]
 		p.sent[k] = true
 		p.sentCount += 1
-		send(gs, p.id, S2C.CHUNK, ChunkCodec.encode(gs.world.chunks[k]))
+		local payload = ChunkCodec.encode(gs.world.chunks[k])
+		bytes += buffer.len(payload)
+		send(gs, p.id, S2C.CHUNK, payload)
 		count(gs, "chunksSent")
 	end
+	gs.stats.bytesSent = (gs.stats.bytesSent or 0) + bytes
 end
 
 function GameServer.tick(gs: GameServer)

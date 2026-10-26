@@ -8,7 +8,7 @@ local Collision = require("../../src/shared/Physics/Collision")
 local C = Protocol.C2S
 
 local function setup()
-	local gs = GameServer.new({ seed = "redstone", viewRadius = 2, genBudget = 50, sendBudget = 50, mobs = false })
+	local gs = GameServer.new({ seed = "redstone", viewRadius = 2, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 1e9, mobs = false })
 	local p = GameServer.addPlayer(gs, 1, "a")
 	GameServer.tick(gs)
 	gs.randomTickRadius = -1

@@ -9,7 +9,7 @@ return function(t)
 	t.describe("Async generation", function()
 		t.test("off-thread chunks match in-thread generation; stale results dropped", function()
 			local requests = {}
-			local gs = GameServer.new({ seed = "async", viewRadius = 2, genBudget = 50, sendBudget = 50, mobs = false, asyncGenerate = function(cx, cz)
+			local gs = GameServer.new({ seed = "async", viewRadius = 2, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 1e9, mobs = false, asyncGenerate = function(cx, cz)
 				table.insert(requests, { cx, cz })
 			end })
 			GameServer.addPlayer(gs, 1, "a")

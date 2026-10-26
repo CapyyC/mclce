@@ -12,6 +12,9 @@ Config.SERVER_VIEW_RADIUS = 6
 Config.CLIENT_VIEW_RADIUS = 6
 Config.GEN_BUDGET_PER_TICK = 2 -- chunk generations per server tick
 Config.SEND_BUDGET_PER_TICK = 4 -- chunk payloads per player per tick
+-- Roblox throttles remote traffic per player; cap chunk bytes (UNVERIFIED value,
+-- tune in Studio with the Network stats). At least one chunk is always sent.
+Config.SEND_BYTES_PER_SECOND = 120000
 Config.MESH_BUDGET_PER_FRAME = 2 -- section meshes per client frame
 Config.MAX_LOADED_CHUNKS = 1500
 Config.GEN_WORKERS = 4 -- parallel generation Actors on the server (0 = generate in the main thread)

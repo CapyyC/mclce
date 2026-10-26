@@ -15,6 +15,7 @@ local function newServer(opts)
 	opts.viewRadius = opts.viewRadius or 2
 	opts.genBudget = opts.genBudget or 50
 	opts.sendBudget = opts.sendBudget or 50
+	opts.sendBytesPerSecond = opts.sendBytesPerSecond or 1e9
 	if opts.mobs == nil then
 		opts.mobs = false
 	end
@@ -63,6 +64,24 @@ return function(t)
 			t.eq(first.cx, 0); t.eq(first.cz, 0)
 			t.eq(#kinds(box, S.INVENTORY), 1)
 			t.truthy(p.y > 40)
+		end)
+		t.test("chunk streaming respects the per-player byte budget", function()
+			local gs = GameServer.new({ seed = "test-seed", viewRadius = 3, genBudget = 50, sendBudget = 50, sendBytesPerSecond = 20 * 6000, mobs = false })
+			GameServer.addPlayer(gs, 1, "a")
+			for _ = 1, 3 do
+				GameServer.tick(gs)
+			end
+			local maxPerTick = 0
+			for _ = 1, 20 do
+				local before = gs.stats.bytesSent or 0
+				GameServer.tick(gs)
+				local sent = (gs.stats.bytesSent or 0) - before
+				maxPerTick = math.max(maxPerTick, sent)
+				GameServer.takeOutbox(gs, 1)
+			end
+			-- one chunk may overshoot the 6000-byte tick budget, never two
+			t.truthy(maxPerTick < 6000 + 20000, "max bytes per tick " .. maxPerTick)
+			t.truthy((gs.stats.chunksSent or 0) >= 29, "eventually streams everything: " .. tostring(gs.stats.chunksSent))
 		end)
 		t.test("survival break requires time; creative is instant; drops are picked up", function()
 			local gs = newServer()

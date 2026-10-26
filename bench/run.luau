@@ -1,5 +1,5 @@
 local Bench = require("./Bench")
-local suites = { "./coords.bench", "./worldgen.bench" }
+local suites = { "./coords.bench", "./worldgen.bench", "./mesh.bench" }
 for _, a in { ... } do
 	if a == "--quick" then
 		Bench.quick = true

@@ -10,7 +10,6 @@ Mock.log = {}
 Mock.remoteTraffic = { toServer = 0, toClient = 0, bytesToClient = 0 }
 
 ------------------------------------------------------------------ scheduler
-local ready = {} -- threads to resume on next step: { co, args }
 local sleeping = {} -- { co, wake }
 local deferred = {}
 

@@ -18,36 +18,35 @@ _Last updated: 2026-10-26 (cloud session 1). Resume by reading this file, ROADMA
 D/E/F code-complete in shared code and exercised end-to-end in the Roblox mock; **unverified in
 real Studio**. G (Legacy fidelity) started (fluids, light, mobs, block entities, farming).
 
-## Done and tested in the Luau CLI (205 specs passing + Roblox mock session PASS)
+## Done and tested in the Luau CLI (245 specs passing + Roblox mock sessions PASS in both renderers)
 - Voxel core: Coords, Chunk (lazy u16 sections, heightmap, versions, block entities), World (finite
-  Legacy border)
-- BlockRegistry (~77 classic-ID blocks), ItemRegistry (tools, food, buckets, mob drops)
-- Meshing: culled + greedy quads (SectionMesher), greedy boxes with hidden-cell wildcards (BoxMesher)
-- World gen: bit-exact JavaRandom (JDK fixture), own Perlin (bit-identical fast path), approximate
-  biomes, density terrain, seamless worm caves, order-independent ores/trees/plants
-- Streaming: chunk scheduler, remesh queue (no leaks toward unloaded neighbours)
-- Persistence: chunk codec v2 (RLE + block entities, v1 readable), Base64, region-batched SaveManager
-  (retries/backoff, migrations, in-flight edit safety, never generates over unreadable saves)
-- Simulation (GameServer): validated break/place/craft/eat/attack/container clicks, rate limiting,
-  JOIN handshake, per-player chunk/block/mob/item replication, survival (hunger, regen, fall damage,
-  death drops, respawn), fluids (water/lava, infinite water, reactions), light engine (verified vs
-  brute force), mobs (8 types, AI, light-based spawning, creeper explosions), chests/furnaces,
-  block updates (support pops, falling sand), random ticks (grass, crops, saplings, cane, cactus,
-  leaf decay), hoe/seeds/buckets/torch attachment
-- Client replica (ClientWorld): prediction + rollback, mobs, containers, targeting
-- Roblox mock harness runs the real glue (boot, join, stream, render, mine, place, attack, chest UI,
-  crafting menu, autosave, shutdown save)
+  Legacy border, batched setStates)
+- BlockRegistry (~95 classic-ID blocks), ItemRegistry (tools, armour, food, buckets, mechanisms)
+- Meshing: culled + greedy quads, greedy boxes, MeshBuilder (shaded triangle batches for EditableMesh)
+- World gen: bit-exact JavaRandom, own Perlin, approximate biomes/terrain, seamless caves,
+  order-independent ores/trees/plants/dungeons; Nether generator
+- Streaming, persistence (codec v2 with block entities, region-batched SaveManager)
+- Simulation: validated break/place/craft/eat/attack/containers/use; survival; fluids; light; mobs
+  (9 types incl. neutral pigmen, arrows); chests/furnaces/spawners; block updates and random ticks;
+  farming; buckets; armour; redstone subset; Nether dimension with portals (Dimensions orchestrator)
+- UI models: Legacy category-tab crafting, D-pad focus grid, menu stack (pause/death)
+- Client replica with prediction/rollback; Roblox mock harness runs the real glue end to end
+  (boot, stream, render, mine, place, attack, chest UI, Legacy crafting, pause, portal to Nether,
+  autosave, shutdown save)
 
 ## Roblox glue (written, run only in the mock)
 `src/server`: Main.server, DataStoreBackend. `src/client`: Main.client, ChunkRenderer (pooled greedy
-Parts), MobRenderer, Hud, Input, CraftingMenu, ContainerMenu. Debug handles: `_G.mclceServer.gs`
-(server), `_G.mclceClient.cw` / `.renderer` (client) for the Studio command bar / MCP.
+Parts), MeshRenderer (opt-in EditableMesh), MobRenderer, Hud, Input, LegacyMenus, ContainerMenu.
+Debug handles: `_G.mclceServer.gs` / `.dims` / `.nether` (server), `_G.mclceClient.cw` / `.renderer`
+(client) for the Studio command bar / MCP.
 
 ## Known gaps / risks
 - Terrain/biomes approximate → seeds do not match console worlds.
 - Renderer: colours + materials only, no textures; EditableMesh path not started. ~22k Parts at
   radius 6 in the mock — real FPS unknown.
-- No armour, bows/arrows (skeletons melee), redstone, structures, Nether/End, weather, Legacy UI art.
+- Missing: beds, player bows, villages/strongholds/fortresses, the End, weather, enchanting,
+  brewing, pistons/repeaters, Legacy UI art (functional placeholder panels only), audio.
+- Nether scale for PS4 1.95 unknown (configurable, default 1:3).
 - Roblox require-by-string in shared modules must be confirmed in Studio (first manual check).
 
 ## Failing tests
@@ -55,7 +54,7 @@ None.
 
 ## Next concrete tasks
 1. Studio verification pass (local session) using TESTING.md; fix what the real engine rejects.
-2. Armour (items, slots, damage reduction) + skeleton arrows (projectile entity).
-3. EditableMesh textured renderer behind a feature flag, Part renderer as fallback.
-4. Legacy Console UI screens (inventory/crafting/furnace layouts, controller focus).
-5. Structures (villages/dungeons) and the Nether (portal, 1/8 scale).
+2. Beds (sleep/skip night, spawn point) and player bows.
+3. Parallel-Luau (Actor) world generation on the server; measure tick cost in Studio.
+4. Legacy UI art pass: inventory/furnace screens on FocusGrid, controller focus visuals.
+5. Pistons and repeaters; villages.

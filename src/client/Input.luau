@@ -18,6 +18,22 @@ Input.actions = {
 	openInventory = false, -- consumed
 }
 
+-- Menu actions queued for the UI layer (MenuModel / CraftingModel action names).
+Input.menuQueue = {}
+
+local MENU_KEYS = {
+	[Enum.KeyCode.ButtonStart] = "pause", [Enum.KeyCode.P] = "pause",
+	[Enum.KeyCode.ButtonX] = "crafting", [Enum.KeyCode.C] = "crafting", [Enum.KeyCode.E] = "crafting",
+	[Enum.KeyCode.ButtonB] = "back", [Enum.KeyCode.Backspace] = "back",
+	[Enum.KeyCode.DPadLeft] = "left", [Enum.KeyCode.Left] = "left",
+	[Enum.KeyCode.DPadRight] = "right", [Enum.KeyCode.Right] = "right",
+	[Enum.KeyCode.DPadUp] = "up", [Enum.KeyCode.Up] = "up",
+	[Enum.KeyCode.DPadDown] = "down", [Enum.KeyCode.Down] = "down",
+	[Enum.KeyCode.ButtonA] = "confirm", [Enum.KeyCode.Return] = "confirm",
+	[Enum.KeyCode.ButtonL1] = "tabPrev", [Enum.KeyCode.Q] = "tabPrev",
+	[Enum.KeyCode.ButtonR1] = "tabNext", [Enum.KeyCode.R] = "tabNext",
+}
+
 local KEYS = {
 	[Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3,
 	[Enum.KeyCode.Four] = 4, [Enum.KeyCode.Five] = 5, [Enum.KeyCode.Six] = 6,
@@ -31,6 +47,10 @@ function Input.start()
 			return
 		end
 		local t, k = io.UserInputType, io.KeyCode
+		local menuAction = MENU_KEYS[k]
+		if menuAction then
+			table.insert(Input.menuQueue, menuAction)
+		end
 		if t == Enum.UserInputType.MouseButton1 or k == Enum.KeyCode.ButtonR2 then
 			a.breakHeld = true
 			a.breakPressed = true
@@ -41,7 +61,7 @@ function Input.start()
 			a.hotbarDelta += 1
 		elseif k == Enum.KeyCode.ButtonL1 then
 			a.hotbarDelta -= 1
-		elseif k == Enum.KeyCode.E or k == Enum.KeyCode.ButtonY then
+		elseif k == Enum.KeyCode.ButtonY then
 			a.openInventory = true
 		elseif KEYS[k] then
 			a.hotbarSelect = KEYS[k]

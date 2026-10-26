@@ -17,7 +17,7 @@ local ItemRegistry = require(Shared.Items.ItemRegistry)
 local ChunkRenderer = require(script.Parent.ChunkRenderer)
 local Hud = require(script.Parent.Hud)
 local Input = require(script.Parent.Input)
-local CraftingMenu = require(script.Parent.CraftingMenu)
+local LegacyMenus = require(script.Parent.LegacyMenus)
 local MobRenderer = require(script.Parent.MobRenderer)
 local ContainerMenu = require(script.Parent.ContainerMenu)
 
@@ -38,9 +38,29 @@ local renderer = if rendererKind == "mesh" then require(script.Parent.MeshRender
 _G.mclceClient.renderer = renderer
 local mobRenderer = MobRenderer.new(cw, workspace)
 local hud = Hud.new(player:WaitForChild("PlayerGui"))
-local crafting = CraftingMenu.new(player.PlayerGui, function(recipeId, grid)
-	table.insert(cw.outgoing, { C2S_KIND.CRAFT, recipeId, grid })
-end)
+local nearCraftingTable
+local menus = LegacyMenus.new(player.PlayerGui, {
+	inventory = function()
+		return cw.inventory
+	end,
+	craft = function(recipeId, grid)
+		table.insert(cw.outgoing, { C2S_KIND.CRAFT, recipeId, grid })
+	end,
+	grid = function()
+		local char = player.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+		if root then
+			local p = root.Position / BS
+			return if nearCraftingTable(p.X, p.Y, p.Z) then 3 else 2
+		end
+		return 2
+	end,
+	event = function(ev)
+		if ev == "close:crafting" then
+			table.insert(cw.outgoing, { C2S_KIND.CLOSE_CONTAINER })
+		end
+	end,
+})
 local containerMenu = ContainerMenu.new(player.PlayerGui, function(slot, button)
 	ClientWorld.containerClick(cw, slot, button)
 end, function(slot, button)
@@ -55,8 +75,8 @@ S2C.OnClientEvent:Connect(function(kind, ...)
 	ClientWorld.apply(cw, kind, { ... })
 	if kind == S2C_KIND.UNLOAD then
 		renderer:dropChunk(...)
-	elseif kind == S2C_KIND.INVENTORY and crafting:isOpen() then
-		crafting:refresh(cw.inventory, crafting.grid)
+	elseif kind == S2C_KIND.INVENTORY then
+		menus:onInventoryChanged()
 	end
 	if kind == S2C_KIND.CONTAINER or (kind == S2C_KIND.INVENTORY and cw.container) then
 		containerMenu:render(cw.container, cw.inventory)
@@ -111,7 +131,7 @@ end
 local helloSent = false
 local placeCooldown = 0
 
-local function nearCraftingTable(px: number, py: number, pz: number): boolean
+function nearCraftingTable(px: number, py: number, pz: number): boolean
 	for y = math.floor(py) - 3, math.floor(py) + 3 do
 		for z = math.floor(pz) - 3, math.floor(pz) + 3 do
 			for x = math.floor(px) - 3, math.floor(px) + 3 do
@@ -150,6 +170,21 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	local a = Input.actions
+	-- menu input first (an open container takes "back"/crafting keys to close itself)
+	for _, act in Input.menuQueue do
+		if cw.container and (act == "back" or act == "crafting") then
+			ClientWorld.closeContainer(cw)
+		elseif not cw.container then
+			menus:action(act)
+		end
+	end
+	table.clear(Input.menuQueue)
+	a.openInventory = false
+	if not menus:isGameplay() or cw.container then
+		-- LB/RB drive menu tabs, not the hotbar, while a screen is open
+		a.hotbarDelta = 0
+		a.hotbarSelect = 0
+	end
 	-- hotbar
 	local inv = cw.inventory
 	local sel = inv.selected
@@ -165,27 +200,11 @@ RunService.RenderStepped:Connect(function(dt)
 		inv.selected = sel
 		table.insert(cw.outgoing, { C2S_KIND.SELECT_SLOT, sel })
 	end
-	if a.openInventory and cw.container then
-		-- E closes an open container
-		a.openInventory = false
-		ClientWorld.closeContainer(cw)
-	end
-	if a.openInventory then
-		a.openInventory = false
-		local open = not crafting:isOpen()
-		crafting:setOpen(open)
-		if open and root then
-			local p = root.Position / BS
-			crafting:refresh(inv, if nearCraftingTable(p.X, p.Y, p.Z) then 3 else 2)
-		else
-			table.insert(cw.outgoing, { C2S_KIND.CLOSE_CONTAINER })
-		end
-	end
 
 	-- targeting
 	local reach = if cw.gamemode == "creative" then Config.REACH_CREATIVE else Config.REACH_SURVIVAL
 	local look = cam.CFrame.LookVector
-	local menuOpen = crafting:isOpen() or containerMenu:isOpen()
+	local menuOpen = not menus:isGameplay() or containerMenu:isOpen()
 	local hit = if menuOpen then nil else ClientWorld.target(cw, camPos.X, camPos.Y, camPos.Z, look.X, look.Y, look.Z, reach)
 	if hit then
 		selPart.CFrame = CFrame.new((hit.x + 0.5) * BS, (hit.y + 0.5) * BS, (hit.z + 0.5) * BS)
@@ -196,7 +215,7 @@ RunService.RenderStepped:Connect(function(dt)
 	local onGround = hum ~= nil and hum.FloorMaterial ~= Enum.Material.Air
 	-- melee: a click on a mob closer than the targeted block attacks it
 	local mob, mobDist = ClientWorld.targetMob(cw, camPos.X, camPos.Y, camPos.Z, look.X, look.Y, look.Z, 3)
-	if a.breakPressed and mob and (hit == nil or mobDist < hit.distance) and not crafting:isOpen() then
+	if a.breakPressed and mob and (hit == nil or mobDist < hit.distance) and not menuOpen then
 		ClientWorld.attack(cw, mob.id)
 		a.breakHeld = false
 	end

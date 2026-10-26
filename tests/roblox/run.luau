@@ -157,12 +157,32 @@ if cgui and cgui.Enabled then
 	check(cgui.Enabled == false, "E closes the chest")
 end
 
-print("[mock] open crafting menu")
-UIS.InputBegan:Fire({ UserInputType = Mock.Enum.UserInputType.Keyboard, KeyCode = Mock.Enum.KeyCode.E }, false)
-H.run(0.2)
-check(player.PlayerGui.mclceCrafting.Enabled == true, "crafting menu opens")
-UIS.InputBegan:Fire({ UserInputType = Mock.Enum.UserInputType.Keyboard, KeyCode = Mock.Enum.KeyCode.E }, false)
-H.run(0.2)
+print("[mock] Legacy crafting screen: open, switch tab, craft planks")
+local function key(k)
+	UIS.InputBegan:Fire({ UserInputType = Mock.Enum.UserInputType.Keyboard, KeyCode = Mock.Enum.KeyCode[k] }, false)
+	H.run(0.1)
+end
+SInventory.add(sp.inventory, SItemStack.new(17, 2))
+sp.inventory.version += 1
+H.run(0.3)
+key("C")
+local lm = player.PlayerGui:FindFirstChild("mclceLegacyMenus")
+check(lm ~= nil and lm.Crafting.Visible == true, "crafting screen opens with C")
+-- planks are in "materials" (last tab): tabPrev wraps there
+key("Q")
+check(lm.Crafting.Tab7.TextColor3.R == 1, "materials tab highlighted")
+local before = SInventory.count(sp.inventory, 5)
+key("Return")
+H.run(0.3)
+check(SInventory.count(sp.inventory, 5) == before + 4, "crafted 4 planks via the menu (" .. SInventory.count(sp.inventory, 5) .. ")")
+key("Backspace")
+check(lm.Crafting.Visible == false, "back closes crafting")
+key("P")
+check(lm.Pause.Visible == true, "pause menu opens")
+key("Down")
+key("Up")
+key("Return")
+check(lm.Pause.Visible == false, "resume closes pause")
 
 print("[mock] autosave + shutdown")
 H.run(31)

@@ -1,0 +1,17 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  luau:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: tools/bin
+          key: luau-${{ hashFiles('scripts/setup-luau.sh') }}
+      - run: scripts/setup-luau.sh
+      - run: scripts/analyze.sh
+      - run: scripts/test.sh
+      - run: scripts/bench.sh --quick

@@ -1,0 +1,9 @@
+/tools/bin/
+/tools/luau-src/
+/build/
+*.rbxl
+*.rbxlx
+*.rbxm
+coverage.out
+profile.out
+sourcemap.json

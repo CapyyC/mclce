@@ -834,9 +834,27 @@ function GameServer._onDeath(gs: GameServer, p: Player, cause: string)
 	send(gs, p.id, S2C.DIED, cause)
 end
 
+-- Causes that armour does not reduce (classic).
+local UNARMORED: { [string]: boolean } = { fell = true, void = true, starved = true, drowned = true }
+
 function GameServer.damage(gs: GameServer, p: Player, amount: number, cause: string): number
 	if p.gamemode == "creative" or p.vitals.dead then
 		return 0
+	end
+	if not UNARMORED[cause] then
+		local points = Inventory.armorPoints(p.inventory)
+		if points > 0 then
+			-- pre-1.9: each defence point blocks 4%; fractional damage carries
+			local reduced = amount * (1 - points * 0.04)
+			Inventory.wearArmor(p.inventory, amount)
+			amount = math.floor(reduced)
+			if gs.rng:nextFloat() < reduced - amount then
+				amount += 1
+			end
+			if amount <= 0 then
+				return 0
+			end
+		end
 	end
 	local dealt, died = Survival.damage(p.vitals, amount)
 	if died then

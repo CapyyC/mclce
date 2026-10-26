@@ -159,6 +159,39 @@ return function(t)
 			t.eq(m.hostileCount, 0)
 			t.eq(m.passiveCount, 1)
 		end)
+		t.test("skeletons shoot arrows that hit the player for ceil(speed*2)", function()
+			local m = Mobs.new(21)
+			local player = { id = 3, x = 10.5, y = 10, z = 0.5, attackable = true }
+			local ctx, log = ctxFor({ player })
+			local sk = Mobs.spawn(m, MobTypes.byName("skeleton"), 0.5, 10, 0.5)
+			sk.attackCooldown = 0
+			run(m, ctx, 120)
+			t.truthy(#log.damage >= 1, "arrow hits " .. #log.damage)
+			t.eq(log.damage[1][3], "arrow")
+			t.truthy(log.damage[1][2] >= 3 and log.damage[1][2] <= 4)
+			t.eq(m.hostileCount, 1, "arrows do not count toward caps")
+		end)
+		t.test("walls block line of sight; arrows stop in blocks", function()
+			local m = Mobs.new(22)
+			local player = { id = 3, x = 10.5, y = 10, z = 0.5, attackable = true }
+			local walls = {}
+			for z = -10, 10 do
+				walls["5," .. z] = true
+			end
+			local ctx, log = ctxFor({ player }, { walls = walls })
+			local sk = Mobs.spawn(m, MobTypes.byName("skeleton"), 0.5, 10, 0.5)
+			sk.attackCooldown = 0
+			run(m, ctx, 60)
+			t.eq(#log.damage, 0)
+			t.falsy(Mobs.lineOfSight(ctx, 0.5, 11.6, 0.5, 10.5, 11.5, 0.5))
+			t.truthy(Mobs.lineOfSight(ctx, 0.5, 13, 0.5, 10.5, 13, 0.5))
+			local a = Mobs.spawn(m, MobTypes.byName("arrow"), 0.5, 11, 0.5)
+			a.vx = 1.6
+			run(m, ctx, 10)
+			t.truthy(a.x < 5 and a.x > 4, "stopped at the wall: " .. a.x)
+			run(m, ctx, 30)
+			t.eq(m.list[a.id], nil, "stuck arrow vanished")
+		end)
 		t.test("jump apex from 0.42 velocity is ~1.25 blocks", function()
 			local m = Mobs.new(13)
 			local ctx = ctxFor({})

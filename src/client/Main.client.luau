@@ -13,6 +13,7 @@ local Protocol = require(Shared.Net.Protocol)
 local ClientWorld = require(Shared.Sim.ClientWorld)
 local World = require(Shared.Voxel.World)
 local RemeshQueue = require(Shared.Streaming.RemeshQueue)
+local ItemRegistry = require(Shared.Items.ItemRegistry)
 local ChunkRenderer = require(script.Parent.ChunkRenderer)
 local Hud = require(script.Parent.Hud)
 local Input = require(script.Parent.Input)
@@ -212,7 +213,13 @@ RunService.RenderStepped:Connect(function(dt)
 	a.placePressed = false
 	-- eating: hold "use" while not aiming at a block
 	ClientWorld.updateUsing(cw, a.placeHeld and hit == nil, dt)
-	hud:setVitals(cw.vitals, cw.deathCause)
+	local armor = 0
+	for slot = 37, 40 do
+		local s = cw.inventory.slots[slot]
+		local d = s and ItemRegistry.get(s.id)
+		armor += if d and d.armor then d.armor else 0
+	end
+	hud:setVitals(cw.vitals, cw.deathCause, armor)
 
 	for _, m in ClientWorld.takeOutgoing(cw) do
 		C2S:FireServer(table.unpack(m))

@@ -101,6 +101,24 @@ return function(t)
 			end
 			t.truthy(p.vitals.health < 20, "health " .. p.vitals.health)
 		end)
+		t.test("full diamond armour reduces melee damage by 80%, not fall damage", function()
+			local gs, p = setup()
+			for i, id in { 310, 311, 312, 313 } do
+				p.inventory.slots[36 + i] = ItemStack.new(id, 1)
+			end
+			local total = 0
+			for _ = 1, 20 do
+				p.vitals.health = 20
+				p.vitals.dead = false
+				GameServer.damage(gs, p, 10, "zombie")
+				total += 20 - p.vitals.health
+			end
+			t.eq(total, 40, "10 * 0.2 = exactly 2 per hit")
+			t.truthy(p.inventory.slots[38].damage > 0, "armour wore")
+			p.vitals.health = 20
+			GameServer.damage(gs, p, 5, "fell")
+			t.eq(p.vitals.health, 15)
+		end)
 		t.test("creeper explosion craters the floor and hurts the player", function()
 			local gs, p = setup()
 			gs.worldTime = 18000

@@ -130,6 +130,39 @@ return function(t)
 			t.falsy(ItemStack.isValid({ id = 3, meta = 0, count = -1, damage = 0 }))
 			t.truthy(ItemStack.isValid({ id = 3, meta = 0, count = 64, damage = 0 }))
 		end)
+		t.test("armour slots accept only the matching piece", function()
+			local inv = Inventory.new()
+			Inventory.add(inv, ItemStack.new(307, 1)) -- iron chestplate
+			t.truthy(Inventory.click(inv, 1, "left"))
+			t.falsy(Inventory.click(inv, 37, "left"), "not a helmet")
+			t.truthy(Inventory.click(inv, 38, "left"))
+			t.eq(Inventory.armorPoints(inv), 6)
+			Inventory.add(inv, ItemStack.new(310, 1))
+			Inventory.add(inv, ItemStack.new(312, 1))
+			Inventory.add(inv, ItemStack.new(313, 1))
+			for _, pair in { { 310, 37 }, { 312, 39 }, { 313, 40 } } do
+				for i = 1, 36 do
+					if inv.slots[i] and inv.slots[i].id == pair[1] then
+						Inventory.click(inv, i, "left")
+						Inventory.click(inv, pair[2], "left")
+					end
+				end
+			end
+			t.eq(Inventory.armorPoints(inv), 3 + 6 + 6 + 3)
+			Inventory.add(inv, ItemStack.new(3, 5))
+			for i = 1, 36 do
+				if inv.slots[i] and inv.slots[i].id == 3 then
+					Inventory.click(inv, i, "left")
+				end
+			end
+			t.falsy(Inventory.click(inv, 40, "left"), "dirt is not boots")
+			Inventory.returnCursor(inv)
+			-- wear: 8 damage wears every piece by 2
+			Inventory.wearArmor(inv, 8)
+			t.eq(inv.slots[38].damage, 2)
+			t.eq(ItemRegistry.get(307).durability, 240)
+			t.eq(ItemRegistry.get(310).durability, 363)
+		end)
 		t.test("randomized operations conserve item counts", function()
 			local inv = Inventory.new()
 			local r = JavaRandom.new(77)

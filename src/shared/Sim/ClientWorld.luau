@@ -254,6 +254,9 @@ function ClientWorld.targetMob(cw: ClientWorld, ox: number, oy: number, oz: numb
 	local best, bestT = nil, math.huge
 	for _, m in cw.mobs do
 		local kind = MobTypes.get(m.type)
+		if kind and kind.projectile then
+			continue
+		end
 		local hw = if kind then kind.width / 2 else 0.3
 		local h = if kind then kind.height else 1.8
 		-- slab test against the AABB

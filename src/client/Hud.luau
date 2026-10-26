@@ -101,9 +101,9 @@ function Hud.new(playerGui: PlayerGui)
 	return self
 end
 
-function Hud:setVitals(v, cause: string?)
+function Hud:setVitals(v, cause: string?, armor: number?)
 	-- half-heart / half-shank counts as text until icon assets exist
-	self.vitals.Text = string.format("HP %d/20   FOOD %d/20", v.health, v.food)
+	self.vitals.Text = string.format("HP %d/20   FOOD %d/20   ARMOR %d", v.health, v.food, armor or 0)
 	self.death.Visible = v.dead
 	if v.dead then
 		self.deathText.Text = "You died! (" .. tostring(cause or "?") .. ")"

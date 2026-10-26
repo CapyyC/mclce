@@ -14,6 +14,8 @@ export type MobType = {
 	drops: { Drop },
 	burnsInDaylight: boolean,
 	color: { number },
+	ranged: boolean?, -- shoots arrows instead of melee
+	projectile: boolean?, -- not a living mob (arrows)
 }
 
 local MobTypes = {}
@@ -26,7 +28,8 @@ local list: { MobType } = {
 	{ id = 54, name = "zombie", hostile = true, health = 20, speed = 0.115, width = 0.6, height = 1.95, attack = 3, drops = { { id = 367, min = 0, max = 2 } }, burnsInDaylight = true, color = { 70, 120, 70 } },
 	{ id = 50, name = "creeper", hostile = true, health = 20, speed = 0.1, width = 0.6, height = 1.7, attack = 0, drops = { { id = 289, min = 0, max = 2 } }, burnsInDaylight = false, color = { 90, 170, 80 } },
 	{ id = 52, name = "spider", hostile = true, health = 16, speed = 0.15, width = 1.4, height = 0.9, attack = 2, drops = { { id = 287, min = 0, max = 2 } }, burnsInDaylight = false, color = { 50, 40, 35 } },
-	{ id = 51, name = "skeleton", hostile = true, health = 20, speed = 0.1, width = 0.6, height = 1.99, attack = 3, drops = { { id = 262, min = 0, max = 2 }, { id = 352, min = 0, max = 2 } }, burnsInDaylight = true, color = { 200, 200, 200 } },
+	{ id = 51, name = "skeleton", hostile = true, health = 20, speed = 0.1, width = 0.6, height = 1.99, attack = 3, drops = { { id = 262, min = 0, max = 2 }, { id = 352, min = 0, max = 2 } }, burnsInDaylight = true, color = { 200, 200, 200 }, ranged = true },
+	{ id = 10, name = "arrow", hostile = false, health = 1, speed = 0, width = 0.5, height = 0.5, attack = 2, drops = {}, burnsInDaylight = false, color = { 120, 90, 60 }, projectile = true },
 }
 
 local byId: { [number]: MobType } = {}

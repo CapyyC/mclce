@@ -9,6 +9,7 @@ local MobTypes = require("./MobTypes")
 local ItemStack = require("../Items/ItemStack")
 local JavaRandom = require("../Util/JavaRandom")
 local BlockRegistry = require("../Blocks/BlockRegistry")
+local VoxelRaycast = require("../Physics/VoxelRaycast")
 
 export type Mob = {
 	id: number,
@@ -115,7 +116,9 @@ function Mobs.spawn(m: Mobs, kind: MobTypes.MobType, x: number, y: number, z: nu
 	m.nextId += 1
 	m.list[mob.id] = mob
 	m.count += 1
-	if kind.hostile then
+	if kind.projectile then
+		-- not counted against mob caps
+	elseif kind.hostile then
 		m.hostileCount += 1
 	else
 		m.passiveCount += 1
@@ -129,7 +132,9 @@ function Mobs.remove(m: Mobs, id: number)
 	if mob then
 		m.list[id] = nil
 		m.count -= 1
-		if mob.kind.hostile then
+		if mob.kind.projectile then
+			-- not counted
+		elseif mob.kind.hostile then
 			m.hostileCount -= 1
 		else
 			m.passiveCount -= 1
@@ -220,6 +225,15 @@ local function think(m: Mobs, mob: Mob, ctx: Context)
 				if mob.fuse < 0 then
 					moveToward(mob, p.x, p.z, kind.speed)
 				end
+			elseif kind.ranged then
+				-- keep some distance and shoot when there is a clear line of sight
+				if dist > 8 then
+					moveToward(mob, p.x, p.z, kind.speed)
+				end
+				if dist <= 15 and mob.attackCooldown <= 0 and Mobs.lineOfSight(ctx, mob.x, mob.y + 1.6, mob.z, p.x, p.y + 1.5, p.z) then
+					Mobs.shootArrow(m, mob, p)
+					mob.attackCooldown = 40 + rng:nextInt(20)
+				end
 			else
 				moveToward(mob, p.x, p.z, kind.speed)
 				if dist <= Mobs.ATTACK_REACH and math.abs(p.y - mob.y) < 1.5 and mob.attackCooldown <= 0 then
@@ -254,6 +268,82 @@ local function think(m: Mobs, mob: Mob, ctx: Context)
 	end
 	if mob.wanderX then
 		moveToward(mob, mob.wanderX :: number, mob.wanderZ :: number, kind.speed * 0.6)
+	end
+end
+
+function Mobs.lineOfSight(ctx: Context, ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean
+	local dx, dy, dz = bx - ax, by - ay, bz - az
+	local dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+	local hit = VoxelRaycast.cast(ctx.getState, ax, ay, az, dx, dy, dz, dist, function(st)
+		local id = st // 16
+		return id ~= 0 and BlockRegistry.occludes(id)
+	end)
+	return hit == nil
+end
+
+Mobs.ARROW_SPEED = 1.6
+Mobs.ARROW_GRAVITY = 0.05
+Mobs.ARROW_DRAG = 0.99
+
+function Mobs.shootArrow(m: Mobs, shooter: Mob, target: PlayerView)
+	local arrow = Mobs.spawn(m, MobTypes.byName("arrow"), shooter.x, shooter.y + 1.5, shooter.z)
+	local dx, dz = target.x - shooter.x, target.z - shooter.z
+	local horiz = math.sqrt(dx * dx + dz * dz)
+	local dy = (target.y + 0.6) - (shooter.y + 1.5) + horiz * 0.2 -- classic: aim at 1/3 height, lob by 0.2 per block
+	local len = math.sqrt(dx * dx + dy * dy + dz * dz)
+	if len < 1e-6 then
+		len = 1
+	end
+	local spread = 0.0075 * 6 -- normal difficulty inaccuracy
+	local rng = m.rng
+	arrow.vx = (dx / len + (rng:nextFloat() - 0.5) * spread) * Mobs.ARROW_SPEED
+	arrow.vy = (dy / len + (rng:nextFloat() - 0.5) * spread) * Mobs.ARROW_SPEED
+	arrow.vz = (dz / len + (rng:nextFloat() - 0.5) * spread) * Mobs.ARROW_SPEED
+	arrow.targetId = shooter.id -- owner
+	arrow.yaw = math.atan2(dz, dx)
+end
+
+-- Arrow flight: sub-stepped so fast arrows don't tunnel through players or blocks.
+local function tickArrow(m: Mobs, a: Mob, ctx: Context)
+	if a.age > 1200 or a.fuse >= 0 then
+		-- stuck arrows linger briefly then vanish
+		if a.fuse >= 0 then
+			a.fuse += 1
+		end
+		if a.age > 1200 or a.fuse > 20 then
+			Mobs.remove(m, a.id)
+		end
+		return
+	end
+	local steps = 4
+	for _ = 1, steps do
+		local nx, ny, nz = a.x + a.vx / steps, a.y + a.vy / steps, a.z + a.vz / steps
+		for _, p in ctx.players do
+			if nx > p.x - 0.3 and nx < p.x + 0.3 and nz > p.z - 0.3 and nz < p.z + 0.3 and ny > p.y and ny < p.y + 1.8 then
+				local speed = math.sqrt(a.vx * a.vx + a.vy * a.vy + a.vz * a.vz)
+				if p.attackable then
+					ctx.damagePlayer(p.id, math.ceil(speed * 2), "arrow", a.x, a.z)
+				end
+				Mobs.remove(m, a.id)
+				return
+			end
+		end
+		local st = ctx.getState(math.floor(nx), math.floor(ny), math.floor(nz))
+		if BlockRegistry.isSolid(st // 16) then
+			a.vx, a.vy, a.vz = 0, 0, 0
+			a.fuse = 0
+			table.insert(m.events.moved, a)
+			return
+		end
+		a.x, a.y, a.z = nx, ny, nz
+	end
+	a.vx *= Mobs.ARROW_DRAG
+	a.vy = a.vy * Mobs.ARROW_DRAG - Mobs.ARROW_GRAVITY
+	a.vz *= Mobs.ARROW_DRAG
+	a.yaw = math.atan2(a.vz, a.vx)
+	table.insert(m.events.moved, a)
+	if a.y < -64 then
+		Mobs.remove(m, a.id)
 	end
 end
 
@@ -303,6 +393,10 @@ function Mobs.tick(m: Mobs, ctx: Context)
 			continue
 		end
 		mob.age += 1
+		if mob.kind.projectile then
+			tickArrow(m, mob, ctx)
+			continue
+		end
 		if mob.hurtTicks > 0 then
 			mob.hurtTicks -= 1
 		end

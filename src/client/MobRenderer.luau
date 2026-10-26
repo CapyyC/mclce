@@ -56,8 +56,9 @@ function MobRenderer:update()
 			f.Parent = self.folder
 			local c = kind and kind.color or { 255, 0, 255 }
 			local color = Color3.fromRGB(c[1], c[2], c[3])
-			local body = part("Body", Vector3.new(w, h * 0.75, w), color, f)
-			local head = part("Head", Vector3.new(w * 0.8, h * 0.25, w * 0.8), color, f)
+			local isArrow = kind ~= nil and kind.projectile == true
+			local body = part("Body", if isArrow then Vector3.new(BS * 0.6, BS * 0.06, BS * 0.06) else Vector3.new(w, h * 0.75, w), color, f)
+			local head = part("Head", if isArrow then Vector3.new(BS * 0.1, BS * 0.1, BS * 0.1) else Vector3.new(w * 0.8, h * 0.25, w * 0.8), color, f)
 			model = { folder = f, body = body, head = head, color = color, h = h }
 			self.models[id] = model
 		end

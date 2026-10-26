@@ -8,7 +8,19 @@
 local ItemStack = require("./ItemStack")
 local SlotClick = require("./SlotClick")
 
-local ARMOUR_RULES: SlotClick.Rules = { maxPlace = 1 }
+local ItemRegistry = require("./ItemRegistry")
+
+-- armour slots 37..40 accept only the matching piece
+local ARMOUR_RULES: { [number]: SlotClick.Rules } = {}
+for slot = 37, 40 do
+	ARMOUR_RULES[slot] = {
+		maxPlace = 1,
+		canPlace = function(s: ItemStack.ItemStack): boolean
+			local d = ItemRegistry.get(s.id)
+			return d ~= nil and d.armorSlot == slot
+		end,
+	}
+end
 
 export type ItemStack = ItemStack.ItemStack
 export type Inventory = {
@@ -147,7 +159,7 @@ function Inventory.click(inv: Inventory, slot: number, button: string): boolean
 	if not validSlot(slot) then
 		return false
 	end
-	local rules = if slot > Inventory.MAIN then ARMOUR_RULES else nil
+	local rules = if slot > Inventory.MAIN then ARMOUR_RULES[slot] else nil
 	local ok, ns, nc = SlotClick.click(inv.slots[slot], inv.cursor, button, rules)
 	if not ok then
 		return false
@@ -197,6 +209,35 @@ function Inventory.quickMove(inv: Inventory, slot: number): boolean
 	end
 	touch(inv)
 	return left < s.count
+end
+
+-- Total defence points of worn armour (0..20).
+function Inventory.armorPoints(inv: Inventory): number
+	local n = 0
+	for slot = 37, 40 do
+		local s = inv.slots[slot]
+		if s then
+			local d = ItemRegistry.get(s.id)
+			n += if d and d.armor then d.armor else 0
+		end
+	end
+	return n
+end
+
+-- Wears each armour piece by max(1, damage // 4); broken pieces vanish.
+function Inventory.wearArmor(inv: Inventory, damage: number)
+	local wear = math.max(1, damage // 4)
+	for slot = 37, 40 do
+		local s = inv.slots[slot]
+		if s then
+			local d = ItemRegistry.get(s.id)
+			if d and d.durability then
+				local nd = s.damage + wear
+				inv.slots[slot] = if nd >= d.durability then nil else ItemStack.new(s.id, 1, s.meta, nd)
+			end
+		end
+	end
+	touch(inv)
 end
 
 -- Drops the cursor stack back into the inventory (closing a UI); returns leftover count.

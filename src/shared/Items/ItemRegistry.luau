@@ -17,6 +17,8 @@ export type ItemDef = {
 	damage: number?, -- melee attack damage (half-hearts) incl. base 1
 	food: number?, -- hunger points restored
 	saturation: number?, -- saturation modifier
+	armorSlot: number?, -- 37 helmet, 38 chestplate, 39 leggings, 40 boots
+	armor: number?, -- defence points
 }
 
 local ItemRegistry = {}
@@ -70,6 +72,32 @@ for material, ids in TOOL_IDS do
 		})
 	end
 end
+
+-- armour (classic ids 298..317): defence points and durability
+-- (durability = material factor x piece base 11/16/15/13)
+type ArmorMat = { name: string, first: number, points: { number }, factor: number }
+local ARMOR: { ArmorMat } = {
+	{ name = "leather", first = 298, points = { 1, 3, 2, 1 }, factor = 5 },
+	{ name = "chainmail", first = 302, points = { 2, 5, 4, 1 }, factor = 15 },
+	{ name = "iron", first = 306, points = { 2, 6, 5, 2 }, factor = 15 },
+	{ name = "diamond", first = 310, points = { 3, 8, 6, 3 }, factor = 33 },
+	{ name = "golden", first = 314, points = { 2, 5, 3, 1 }, factor = 7 },
+}
+local PIECES = { "helmet", "chestplate", "leggings", "boots" }
+local PIECE_BASE = { 11, 16, 15, 13 }
+for _, m in ARMOR do
+	for i, piece in PIECES do
+		add({
+			id = m.first + i - 1,
+			name = m.name .. "_" .. piece,
+			maxStack = 1,
+			armorSlot = 36 + i,
+			armor = m.points[i],
+			durability = m.factor * PIECE_BASE[i],
+		})
+	end
+end
+add({ id = 334, name = "leather", maxStack = 64 })
 
 add({ id = 359, name = "shears", maxStack = 1, tool = "shears", tier = 0, speed = 15, durability = 238 })
 add({ id = 260, name = "apple", maxStack = 64, food = 4, saturation = 0.3 })

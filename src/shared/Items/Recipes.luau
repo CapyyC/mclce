@@ -80,6 +80,21 @@ for _, m in TOOL_MATS do
 	end
 end
 
+-- armour: helmet 5, chestplate 8, leggings 7, boots 4 of the material
+type ArmorRecipe = { name: string, mat: number, first: number }
+local ARMOR_RECIPES: { ArmorRecipe } = {
+	{ name = "leather", mat = 334, first = 298 },
+	{ name = "iron", mat = IRON, first = 306 },
+	{ name = "diamond", mat = DIAMOND, first = 310 },
+	{ name = "golden", mat = GOLD, first = 314 },
+}
+local ARMOR_COST = { { "helmet", 5 }, { "chestplate", 8 }, { "leggings", 7 }, { "boots", 4 } }
+for _, a in ARMOR_RECIPES do
+	for i, piece in ARMOR_COST do
+		add(a.name .. "_" .. (piece[1] :: string), "armour", 3, { a.first + i - 1, 1 }, { { id = a.mat, count = piece[2] :: number } })
+	end
+end
+
 -- storage blocks and back
 type Storage = { name: string, block: number, item: number, meta: number }
 local STORAGE: { Storage } = {

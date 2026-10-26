@@ -110,6 +110,15 @@ for _, a in ARMOR_RECIPES do
 	end
 end
 
+-- dyes and wool dyeing (data values: 1 rose red, 2 cactus green, 4 lapis,
+-- 11 dandelion yellow, 15 bone meal)
+add("rose_red", "materials", 2, { 351, 1, 1 }, { { id = 38, count = 1 } })
+add("dandelion_yellow", "materials", 2, { 351, 1, 11 }, { { id = 37, count = 1 } })
+add("bone_meal", "materials", 2, { 351, 3, 15 }, { { id = 352, count = 1 } })
+for _, d in { 1, 2, 4, 11 } do
+	add("wool_dye_" .. d, "decoration", 2, { 35, 1, 15 - d }, { { id = 35, meta = 0, count = 1 }, { id = 351, meta = d, count = 1 } })
+end
+
 -- storage blocks and back
 type Storage = { name: string, block: number, item: number, meta: number }
 local STORAGE: { Storage } = {

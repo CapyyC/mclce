@@ -41,6 +41,7 @@ local layerArr = BlockRegistry._layer
 local fullCube = BlockRegistry._fullCube
 local cullSameArr = BlockRegistry._cullSame
 local faceTex = TextureIndex._faceTex
+local stateTex = TextureIndex._stateTex
 
 local PAD = Padded.new()
 local MASK: { number } = table.create(256, 0)
@@ -126,7 +127,7 @@ function SectionMesher.meshPadded(pad: buffer, greedy: boolean): MeshData
 							if isCubeLike[id + 1] and layerArr[id + 1] ~= 0 then
 								local nid = buffer.readu16(pad, (pi + off) * 2) // 16
 								if faceVisible(id, nid) then
-									key = faceTex[id * 6 + face + 1] * 4 + layerArr[id + 1]
+									key = (stateTex[st + 1] or faceTex[id * 6 + face + 1]) * 4 + layerArr[id + 1]
 									visible += 1
 									any = true
 								end

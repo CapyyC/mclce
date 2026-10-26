@@ -207,6 +207,24 @@ return function(t)
 				end
 			end
 		end)
+		t.test("differently coloured wool never merges; same colour does", function()
+			local w = newWorld()
+			World.setState(w, 0, 3, 0, 35 * 16 + 14) -- red
+			World.setState(w, 1, 3, 0, 35 * 16 + 11) -- blue
+			World.setState(w, 2, 3, 0, 35 * 16 + 11)
+			local m = SectionMesher.mesh(airSource(w), 0, 0, 0)
+			-- top faces: red 1x1 + blue 2x1 => 2 quads on face 2
+			local tops = 0
+			for q = 0, m.quadCount - 1 do
+				if m.quads[q * S + 1] == 2 then
+					tops += 1
+				end
+			end
+			t.eq(tops, 2)
+			local TextureIndex = require("../../src/shared/Mesh/TextureIndex")
+			t.truthy(TextureIndex.forState(35 * 16 + 14, 2) ~= TextureIndex.forState(35 * 16 + 11, 2))
+			t.eq(TextureIndex.coloredState(TextureIndex.forState(35 * 16 + 14, 0)), 35 * 16 + 14)
+		end)
 		t.test("quads carry the per-face texture (grass top vs side)", function()
 			local TextureIndex = require("../../src/shared/Mesh/TextureIndex")
 			local w = newWorld()

@@ -18,7 +18,7 @@ local MobTypes = require("./MobTypes")
 
 local S2C, C2S = Protocol.S2C, Protocol.C2S
 
-export type MobView = { id: number, type: number, x: number, y: number, z: number, yaw: number, health: number, hurtAt: number }
+export type MobView = { id: number, type: number, x: number, y: number, z: number, yaw: number, health: number, hurtAt: number, color: number, sheared: boolean }
 
 export type ItemView = { id: number, x: number, y: number, z: number, item: number, meta: number, count: number }
 
@@ -201,7 +201,8 @@ function ClientWorld.apply(cw: ClientWorld, kind: number, args: { any })
 		elseif kind == S2C.MOBS then
 			local ev = args[1]
 			for _, s in ev.spawned do
-				cw.mobs[s[1]] = { id = s[1], type = s[2], x = s[3], y = s[4], z = s[5], yaw = s[6], health = s[7], hurtAt = -1 }
+				local look = s[8] or 0
+				cw.mobs[s[1]] = { id = s[1], type = s[2], x = s[3], y = s[4], z = s[5], yaw = s[6], health = s[7], hurtAt = -1, color = look % 16, sheared = look >= 16 }
 				cw.mobsChanged[s[1]] = true
 			end
 			for _, m in ev.moved do
@@ -216,6 +217,13 @@ function ClientWorld.apply(cw: ClientWorld, kind: number, args: { any })
 				if e then
 					e.hurtAt = cw.clock
 					cw.mobsChanged[id] = true
+				end
+			end
+			for _, a in ev.appearance or {} do
+				local e = cw.mobs[a[1]]
+				if e then
+					e.color, e.sheared = a[2] % 16, a[2] >= 16
+					cw.mobsChanged[a[1]] = true
 				end
 			end
 			for _, id in ev.removed do
@@ -328,6 +336,10 @@ end
 
 function ClientWorld.closeContainer(cw: ClientWorld)
 	out(cw, C2S.CLOSE_CONTAINER)
+end
+
+function ClientWorld.interact(cw: ClientWorld, mobId: number)
+	out(cw, C2S.INTERACT, mobId)
 end
 
 function ClientWorld.attack(cw: ClientWorld, mobId: number)

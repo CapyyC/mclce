@@ -25,14 +25,20 @@ ChunkRenderer.__index = ChunkRenderer
 
 type Style = { color: Color3, material: Enum.Material, transparency: number, collide: boolean }
 
+local Colors = require(Shared.Blocks.Colors)
+
 local styles: { [number]: Style } = {}
-local function styleOf(id: number): Style
-	local s = styles[id]
+-- keyed by state for metadata-coloured blocks (wool, stained clay), else by id
+local function styleOf(stateOrId: number, isState: boolean?): Style
+	local id = if isState then stateOrId // 16 else stateOrId
+	local key = if isState and Colors.isColored(id) then -stateOrId - 1 else id
+	local s = styles[key]
 	if s then
 		return s
 	end
 	local def = BlockRegistry.get(id)
-	local color = if def then Color3.fromRGB(def.color[1], def.color[2], def.color[3]) else Color3.new(1, 0, 1)
+	local rgb = if isState then Colors.forState(stateOrId) else (if def then def.color else { 255, 0, 255 })
+	local color = Color3.fromRGB(rgb[1], rgb[2], rgb[3])
 	local okMat, mat = pcall(function()
 		return Enum.Material[def and def.material or "SmoothPlastic"]
 	end)
@@ -48,7 +54,7 @@ local function styleOf(id: number): Style
 		transparency = transparency,
 		collide = def ~= nil and def.solid,
 	}
-	styles[id] = s
+	styles[key] = s
 	return s
 end
 
@@ -140,7 +146,7 @@ function ChunkRenderer:buildSection(cx: number, cz: number, si: number)
 	for b = 0, boxes.boxCount - 1 do
 		local o = b * BoxMesher.BOX_STRIDE
 		local x, y, z, sx, sy, sz, st = data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o + 5], data[o + 6], data[o + 7]
-		local style = styleOf(st // 16)
+		local style = styleOf(st, true)
 		if self.collisionOnly and not style.collide then
 			continue
 		end

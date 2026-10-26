@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local MobTypes = require(Shared.Sim.MobTypes)
+local Colors = require(Shared.Blocks.Colors)
 
 local BS = Config.BLOCK_SIZE
 
@@ -66,7 +67,13 @@ function MobRenderer:update()
 		model.body.CFrame = CFrame.new(m.x * BS, m.y * BS + model.h * 0.375, m.z * BS) * rot
 		model.head.CFrame = CFrame.new(m.x * BS, m.y * BS + model.h * 0.875, m.z * BS) * rot
 		local hurt = m.hurtAt >= 0 and cw.clock - m.hurtAt < 0.4
-		local col = if hurt then Color3.fromRGB(255, 60, 60) else model.color
+		local base = model.color
+		if kind and kind.name == "sheep" then
+			-- wool colour; sheared sheep show their pale skin
+			local c = if m.sheared then { 220, 190, 170 } else Colors.WOOL[m.color]
+			base = Color3.fromRGB(c[1], c[2], c[3])
+		end
+		local col = if hurt then Color3.fromRGB(255, 60, 60) else base
 		model.body.Color = col
 		model.head.Color = col
 		if hurt then

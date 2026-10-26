@@ -35,8 +35,10 @@ local MobTypes = require("./MobTypes")
 local Time = require("./Time")
 local BlockEntities = require("./BlockEntities")
 local BlockUpdates = require("./BlockUpdates")
+local Decorator = require("../WorldGen/Decorator")
 local Redstone = require("./Redstone")
 local Portals = require("./Portals")
+local Colors = require("../Blocks/Colors")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -618,6 +620,36 @@ function GameServer._useItem(gs: GameServer, p: Player, held: ItemStack.ItemStac
 			reject(gs, p)
 		end
 		return true
+	elseif held.id == 351 and held.meta == 15 then -- bone meal
+		local grew = false
+		if tid == 59 and target % 16 < 7 then
+			World.setState(world, tx, ty, tz, 59 * 16 + 7)
+			grew = true
+		elseif tid == 6 then
+			if gs.rng:nextInt(100) < 45 then
+				World.setState(world, tx, ty, tz, 0)
+				local SAPLING_TREES = { [0] = "oak", "spruce", "birch", "jungle" }
+				Decorator.growTree(world, SAPLING_TREES[target % 4] or "oak", gs.rng, tx, ty, tz)
+				if World.getId(world, tx, ty, tz) == 0 then
+					World.setState(world, tx, ty, tz, target)
+				end
+			end
+			grew = true
+		elseif tid == 2 then
+			for _ = 1, 16 do
+				local gx, gz = tx + gs.rng:nextInt(7) - 3, tz + gs.rng:nextInt(7) - 3
+				if World.getId(world, gx, ty, gz) == 2 and World.getId(world, gx, ty + 1, gz) == 0 then
+					World.setState(world, gx, ty + 1, gz, if gs.rng:nextInt(8) == 0 then (if gs.rng:nextBoolean() then 37 * 16 else 38 * 16) else 31 * 16 + 1)
+				end
+			end
+			grew = true
+		end
+		if grew then
+			consume()
+		else
+			reject(gs, p)
+		end
+		return true
 	elseif held.id == 295 then -- seeds
 		if face == 2 and tid == 60 and World.getId(world, tx, ty + 1, tz) == 0 then
 			World.setState(world, tx, ty + 1, tz, 59 * 16)
@@ -906,6 +938,8 @@ function GameServer.handle(gs: GameServer, id: number, kind: any, args: { any })
 		end
 	elseif k == C2S.ATTACK then
 		GameServer._attack(gs, p, m.mob)
+	elseif k == C2S.INTERACT then
+		GameServer._interact(gs, p, m.mob)
 	elseif k == C2S.JOIN then
 		GameServer._join(gs, p)
 	elseif k == C2S.HELLO then
@@ -1347,6 +1381,13 @@ function GameServer._mobContext(gs: GameServer): Mobs.Context
 		end,
 		isDay = gs.dimension ~= "nether" and Time.isDay(gs.worldTime),
 		spawnList = if gs.dimension == "nether" then { "zombie_pigman" } else nil,
+		eatGrass = function(x, y, z)
+			if World.getId(world, x, y, z) == 2 then
+				World.setState(world, x, y, z, 3 * 16)
+				return true
+			end
+			return false
+		end,
 		damagePlayer = function(id, amount, cause)
 			local p = gs.players[id]
 			if p then
@@ -1405,6 +1446,36 @@ function GameServer.explode(gs: GameServer, x: number, y: number, z: number, pow
 	count(gs, "explosions")
 end
 
+-- "Use" on a mob: shears shear sheep, dyes colour them.
+function GameServer._interact(gs: GameServer, p: Player, mobId: number)
+	local mob = gs.mobs.list[mobId]
+	local held = Inventory.held(p.inventory)
+	if mob == nil or held == nil then
+		p.rejected += 1
+		return
+	end
+	local dx, dz = mob.x - p.x, mob.z - p.z
+	if dx * dx + dz * dz > 25 then
+		p.rejected += 1
+		return
+	end
+	if held.id == 359 then
+		local wool = Mobs.shear(gs.mobs, mob)
+		if wool then
+			ItemEntities.spawn(gs.items, mob.x, mob.y + 1, mob.z, wool, (gs.rng:nextFloat() - 0.5) * 0.2, 0.2, (gs.rng:nextFloat() - 0.5) * 0.2)
+			if p.gamemode == "survival" then
+				local nd = held.damage + 1
+				p.inventory.slots[p.inventory.selected] = if nd >= 238 then nil else ItemStack.new(359, 1, 0, nd)
+				p.inventory.version += 1
+			end
+		end
+	elseif held.id == 351 then
+		if Mobs.dye(gs.mobs, mob, Colors.woolFromDye(held.meta)) and p.gamemode == "survival" then
+			Inventory.consumeHeld(p.inventory, 1)
+		end
+	end
+end
+
 function GameServer._attack(gs: GameServer, p: Player, mobId: number)
 	local mob = gs.mobs.list[mobId]
 	if mob == nil then
@@ -1443,7 +1514,7 @@ local function replicateMobs(gs: GameServer, p: Player, ev: Mobs.Events)
 		local visible = dx * dx + dz * dz <= r2 and p.sent[Coords.chunkKey(math.floor(mob.x) // 16, math.floor(mob.z) // 16)] == true
 		if visible and not p.knownMobs[id] then
 			p.knownMobs[id] = true
-			table.insert(spawned, { id, mob.kind.id, mob.x, mob.y, mob.z, mob.yaw, mob.health })
+			table.insert(spawned, { id, mob.kind.id, mob.x, mob.y, mob.z, mob.yaw, mob.health, mob.color + (if mob.sheared then 16 else 0) })
 		elseif not visible and p.knownMobs[id] then
 			p.knownMobs[id] = nil
 			table.insert(removed, id)
@@ -1465,8 +1536,14 @@ local function replicateMobs(gs: GameServer, p: Player, ev: Mobs.Events)
 			table.insert(hurt, id)
 		end
 	end
-	if #spawned + #moved + #removed + #hurt > 0 then
-		send(gs, p.id, S2C.MOBS, { spawned = spawned, moved = moved, removed = removed, hurt = hurt })
+	local look = {}
+	for _, mob in ev.appearance do
+		if p.knownMobs[mob.id] and gs.mobs.list[mob.id] then
+			table.insert(look, { mob.id, mob.color + (if mob.sheared then 16 else 0) })
+		end
+	end
+	if #spawned + #moved + #removed + #hurt + #look > 0 then
+		send(gs, p.id, S2C.MOBS, { spawned = spawned, moved = moved, removed = removed, hurt = hurt, appearance = look })
 	end
 end
 

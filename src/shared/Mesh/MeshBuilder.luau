@@ -17,6 +17,7 @@
 local BlockRegistry = require("../Blocks/BlockRegistry")
 local TextureIndex = require("./TextureIndex")
 local SectionMesher = require("./SectionMesher")
+local Colors = require("../Blocks/Colors")
 
 export type Batch = {
 	positions: { number },
@@ -124,7 +125,8 @@ function MeshBuilder.build(mesh: SectionMesher.MeshData, opts: Options?): { Batc
 		end
 		assert(b)
 		local c, plane = corners(face, n, u, v, w, h)
-		local col = texColor[tex] or { 255, 0, 255 }
+		local cs = TextureIndex.coloredState(tex)
+		local col = if cs then Colors.forState(cs) else (texColor[tex] or { 255, 0, 255 })
 		local shade = MeshBuilder.SHADE[face]
 		local r, g, bl = col[1] / 255 * shade, col[2] / 255 * shade, col[3] / 255 * shade
 		-- image v grows downward, so plane-v (up) maps to 1 - v

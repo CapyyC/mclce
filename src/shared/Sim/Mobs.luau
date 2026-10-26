@@ -37,6 +37,9 @@ export type Mob = {
 	wantJump: boolean,
 	angryAt: number?, -- neutral mobs: player id that hurt them
 	ownerPlayer: number?, -- arrows shot by a player
+	color: number, -- sheep wool colour (data value)
+	sheared: boolean,
+	version: number, -- bumps when appearance (colour/sheared) changes
 }
 
 export type PlayerView = { id: number, x: number, y: number, z: number, attackable: boolean }
@@ -52,9 +55,10 @@ export type Context = {
 	explode: (x: number, y: number, z: number, power: number) -> (),
 	dropItem: (x: number, y: number, z: number, stack: ItemStack.ItemStack) -> (),
 	spawnList: { string }?, -- hostile spawn list for this dimension (default overworld)
+	eatGrass: ((x: number, y: number, z: number) -> boolean)?,
 }
 
-export type Events = { spawned: { Mob }, moved: { Mob }, removed: { number }, hurt: { number } }
+export type Events = { spawned: { Mob }, moved: { Mob }, removed: { number }, hurt: { number }, appearance: { Mob } }
 
 export type Mobs = {
 	list: { [number]: Mob },
@@ -86,7 +90,7 @@ function Mobs.new(seed: number): Mobs
 		passiveCount = 0,
 		nextId = 1,
 		rng = JavaRandom.new(seed),
-		events = { spawned = {}, moved = {}, removed = {}, hurt = {} },
+		events = { spawned = {}, moved = {}, removed = {}, hurt = {}, appearance = {} },
 	}
 end
 
@@ -115,7 +119,15 @@ function Mobs.spawn(m: Mobs, kind: MobTypes.MobType, x: number, y: number, z: nu
 		age = 0,
 		persistent = persistent == true,
 		wantJump = false,
+		color = 0,
+		sheared = false,
+		version = 0,
 	}
+	if kind.name == "sheep" then
+		-- classic natural colours: white 81.8%, light gray/gray/black 5% each, brown 3%, pink 0.16%
+		local r = m.rng:nextInt(10000)
+		mob.color = if r < 500 then 15 elseif r < 1000 then 7 elseif r < 1500 then 8 elseif r < 1800 then 12 elseif r < 1816 then 6 else 0
+	end
 	m.nextId += 1
 	m.list[mob.id] = mob
 	m.count += 1
@@ -159,6 +171,13 @@ local function nearestPlayer(ctx: Context, x: number, y: number, z: number): (Pl
 end
 
 local function die(m: Mobs, mob: Mob, ctx: Context)
+	if mob.kind.name == "sheep" then
+		if not mob.sheared then
+			ctx.dropItem(mob.x, mob.y + 0.5, mob.z, ItemStack.new(35, 1, mob.color))
+		end
+		Mobs.remove(m, mob.id)
+		return
+	end
 	for _, d in mob.kind.drops do
 		local n = d.min + m.rng:nextInt(d.max - d.min + 1)
 		if n > 0 then
@@ -470,6 +489,13 @@ function Mobs.tick(m: Mobs, ctx: Context)
 		if m.list[id] == nil then
 			continue
 		end
+		if mob.sheared and mob.onGround and m.rng:nextInt(1000) == 0 and ctx.eatGrass then
+			if ctx.eatGrass(math.floor(mob.x), math.floor(mob.y) - 1, math.floor(mob.z)) then
+				mob.sheared = false
+				mob.version += 1
+				table.insert(m.events.appearance, mob)
+			end
+		end
 		local ox, oy, oz = mob.x, mob.y, mob.z
 		physics(mob, ctx)
 		if mob.y < -64 then
@@ -543,9 +569,30 @@ function Mobs.spawnCycle(m: Mobs, ctx: Context, attempts: number): number
 	return spawned
 end
 
+-- Shears a sheep: returns the wool dropped (1..3 of its colour) or nil.
+function Mobs.shear(m: Mobs, mob: Mob): ItemStack.ItemStack?
+	if mob.kind.name ~= "sheep" or mob.sheared then
+		return nil
+	end
+	mob.sheared = true
+	mob.version += 1
+	table.insert(m.events.appearance, mob)
+	return ItemStack.new(35, 1 + m.rng:nextInt(3), mob.color)
+end
+
+function Mobs.dye(m: Mobs, mob: Mob, woolColor: number): boolean
+	if mob.kind.name ~= "sheep" or mob.color == woolColor then
+		return false
+	end
+	mob.color = woolColor
+	mob.version += 1
+	table.insert(m.events.appearance, mob)
+	return true
+end
+
 function Mobs.takeEvents(m: Mobs): Events
 	local e = m.events
-	m.events = { spawned = {}, moved = {}, removed = {}, hurt = {} }
+	m.events = { spawned = {}, moved = {}, removed = {}, hurt = {}, appearance = {} }
 	return e
 end
 

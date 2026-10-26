@@ -26,6 +26,7 @@ Protocol.C2S = {
 	JOIN = 15, -- client listener is connected; server may start sending
 	ATTACK = 16, -- mobId
 	CONTAINER_CLICK = 17, -- slot (1..27), button
+	INTERACT = 18, -- mobId ("use" on an entity: shears, dye)
 }
 
 Protocol.S2C = {
@@ -112,7 +113,7 @@ function Protocol.decodeC2S(kind: any, args: { any }): Message?
 		if #args == 2 and isInt(args[1], 1, 100000) and (args[2] == 2 or args[2] == 3) then
 			return { kind = kind, recipe = args[1], grid = args[2] }
 		end
-	elseif kind == C.ATTACK then
+	elseif kind == C.ATTACK or kind == C.INTERACT then
 		if #args == 1 and isInt(args[1], 1, 2 ^ 31) then
 			return { kind = kind, mob = args[1] }
 		end

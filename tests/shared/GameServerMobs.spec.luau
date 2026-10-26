@@ -139,6 +139,58 @@ return function(t)
 			t.truthy(p.vitals.health < 20)
 			t.eq(World.getId(gs.world, 0, 0, 0), B.BEDROCK)
 		end)
+		t.test("shearing and dyeing sheep; killing drops wool of its colour", function()
+			local gs, p = setup()
+			local sheep = Mobs.spawn(gs.mobs, MobTypes.byName("sheep"), 2.5, 81, 0.5)
+			sheep.color = 0
+			sheep.wanderTicks = 100000
+			p.inventory.slots[1] = ItemStack.new(351, 2, 1) -- rose red
+			p.inventory.selected = 1
+			GameServer.handle(gs, 1, C.INTERACT, { sheep.id })
+			t.eq(sheep.color, 14, "dyed red")
+			t.eq(p.inventory.slots[1].count, 1)
+			GameServer.tick(gs)
+			local box = GameServer.takeOutbox(gs, 1)
+			local sawAppearance = false
+			for _, m in box do
+				if m.kind == S.MOBS and m.args[1].appearance and #m.args[1].appearance > 0 then
+					sawAppearance = true
+				end
+			end
+			t.truthy(sawAppearance, "appearance replicated")
+			p.inventory.slots[1] = ItemStack.new(359, 1)
+			GameServer.handle(gs, 1, C.INTERACT, { sheep.id })
+			t.truthy(sheep.sheared)
+			local red = 0
+			for _, e in gs.items.list do
+				if e.stack.id == 35 and e.stack.meta == 14 then
+					red += e.stack.count
+				end
+			end
+			t.truthy(red >= 1 and red <= 3, "red wool " .. red)
+			GameServer.handle(gs, 1, C.INTERACT, { sheep.id }) -- already sheared
+			t.eq(p.inventory.slots[1].damage, 1)
+			local sheep2 = Mobs.spawn(gs.mobs, MobTypes.byName("sheep"), 3.5, 81, 0.5)
+			sheep2.color = 11
+			Mobs.hurt(gs.mobs, sheep2, 100, 0, 0, GameServer._mobContext(gs))
+			local blue = false
+			for _, e in gs.items.list do
+				if e.stack.id == 35 and e.stack.meta == 11 then
+					blue = true
+				end
+			end
+			t.truthy(blue)
+		end)
+		t.test("bone meal ripens wheat", function()
+			local gs, p = setup()
+			World.setState(gs.world, 2, 80, 0, 60 * 16)
+			World.setState(gs.world, 2, 81, 0, 59 * 16)
+			p.inventory.slots[1] = ItemStack.new(351, 1, 15)
+			p.inventory.selected = 1
+			GameServer.handle(gs, 1, C.PLACE, { 2, 81, 0, 2 })
+			t.eq(World.getState(gs.world, 2, 81, 0), 59 * 16 + 7)
+			t.eq(p.inventory.slots[1], nil)
+		end)
 		t.test("a dungeon spawner spawns its mob near players", function()
 			local gs = setup()
 			local BlockEntities = require("../../src/shared/Sim/BlockEntities")

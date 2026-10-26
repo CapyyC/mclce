@@ -254,6 +254,12 @@ RunService.RenderStepped:Connect(function(dt)
 		ClientWorld.updateBreaking(cw, nil, nil, nil, dt, onGround, false)
 	end
 	placeCooldown -= dt
+	local heldNow = ClientWorld.held(cw)
+	local entityTool = heldNow ~= nil and (heldNow.id == 359 or heldNow.id == 351)
+	if a.placePressed and entityTool and mob and (hit == nil or mobDist < hit.distance) and not menuOpen then
+		ClientWorld.interact(cw, mob.id) -- shears / dye on a sheep
+		a.placePressed = false
+	end
 	if hit and hit.face >= 0 and (a.placePressed or (a.placeHeld and placeCooldown <= 0)) then
 		table.insert(cw.outgoing, { C2S_KIND.PLACE, hit.x, hit.y, hit.z, hit.face })
 		placeCooldown = 0.2 -- classic right-click repeat: 4 ticks

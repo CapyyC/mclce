@@ -37,7 +37,7 @@ Console / classic numeric-ID Minecraft (wiki-level facts), never code.
 | Combat: weapon damage, 10-tick i-frames, knockback, tool wear | RS, PART | No crits, no armour yet. |
 | Creeper explosion power 3, damage formula | RS, PART | Sphere-based block destruction (not ray-based); drop chance 1/power RS. |
 | Furnace: 200 ticks/item, coal = 8 items, lit swap | RS | |
-| Chests 27 slots | RS | No double chests. |
+| Chests 27 slots | RS | No double chests. Chest/furnace screens: mouse or D-pad focus + A. |
 | Random ticks (3/section/tick), crops, saplings, grass, leaf decay (4 blocks), cane/cactus | RS, PART | Growth probabilities simplified. |
 | Falling sand/gravel | INF | Instant fall, no falling-block entity. |
 | Nether: 128-high netherrack caverns, bedrock shell, lava sea ≤ 31, glowstone, quartz | INF, PART | Approximate shape; no fortresses, ghasts or magma cubes; zombie pigmen (neutral, group anger). |

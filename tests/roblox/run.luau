@@ -156,6 +156,18 @@ if cgui and cgui.Enabled then
 	local e = SBE.get(gs.world, bx, by, bz + 1)
 	check(e ~= nil and e.slots[1] ~= nil, "item moved into the chest via UI")
 	check(string.find(buttons[1].Text, "") ~= nil and buttons[1].Text ~= "", "chest slot shows the item: " .. buttons[1].Text)
+	-- keyboard / d-pad: focus starts on chest slot 1; Enter picks up, Right, Enter drops into slot 2
+	local function press(k)
+		UIS.InputBegan:Fire({ UserInputType = Mock.Enum.UserInputType.Keyboard, KeyCode = Mock.Enum.KeyCode[k] }, false)
+		H.run(0.2)
+	end
+	press("Return")
+	press("Right")
+	check(buttons[2].BackgroundColor3.G > buttons[3].BackgroundColor3.G, "focus highlight moved to chest slot 2")
+	press("Return")
+	H.run(0.2)
+	e = SBE.get(gs.world, bx, by, bz + 1)
+	check(e.slots[1] == nil and e.slots[2] ~= nil, "d-pad moved the stack from chest slot 1 to 2")
 	UIS.InputBegan:Fire({ UserInputType = Mock.Enum.UserInputType.Keyboard, KeyCode = Mock.Enum.KeyCode.E }, false)
 	H.run(0.3)
 	check(cgui.Enabled == false, "E closes the chest")

@@ -239,6 +239,10 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 		if cw.container and (act == "back" or act == "crafting") then
 			ClientWorld.closeContainer(cw)
+		elseif cw.container then
+			if containerMenu:action(act) then
+				containerMenu:render(cw.container, cw.inventory)
+			end
 		elseif not cw.container then
 			local inInventory = not menus:isGameplay() and menus.menu.stack[#menus.menu.stack].name == "inventory"
 			if inInventory and creativeMenu.gui.Enabled and creativeMenu:action(act) then

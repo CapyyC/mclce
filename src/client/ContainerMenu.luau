@@ -2,11 +2,13 @@
 -- Functional container screen (chest 27 slots / furnace input-fuel-output)
 -- above the player's 36 inventory slots. Clicking sends validated requests;
 -- the server's snapshot is the only source of truth for what is shown.
+-- D-pad / arrows move a focus cursor, A / Enter clicks the focused slot.
 -- Legacy Console layout/art is TODO (see ROADMAP "Legacy UI").
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ItemRegistry = require(Shared.Items.ItemRegistry)
+local FocusGrid = require(Shared.UI.FocusGrid)
 
 local ContainerMenu = {}
 ContainerMenu.__index = ContainerMenu
@@ -43,6 +45,7 @@ function ContainerMenu.new(playerGui: PlayerGui, onContainerClick, onInventoryCl
 	self.title.Parent = frame
 	self.gui, self.frame = gui, frame
 	self.containerButtons, self.inventoryButtons = {}, {}
+	self.onContainerClick, self.onInventoryClick = onContainerClick, onInventoryClick
 	local function button(x, y, onClick)
 		local b = Instance.new("TextButton")
 		b.Size = UDim2.fromOffset(66, 36)
@@ -79,6 +82,53 @@ function ContainerMenu:isOpen(): boolean
 	return self.gui.Enabled
 end
 
+-- D-pad focus over the slots as drawn: container rows from row 0, storage
+-- rows 4..6, hotbar row 7. Container slot ids are "c1".."cN".
+local function layout(size: number)
+	local out = {}
+	for i = 1, size do
+		table.insert(out, { id = "c" .. i, col = (i - 1) % 9, row = (i - 1) // 9 })
+	end
+	for i = 10, 36 do
+		table.insert(out, { id = i, col = (i - 10) % 9, row = 4 + (i - 10) // 9 })
+	end
+	for i = 1, 9 do
+		table.insert(out, { id = i, col = i - 1, row = 7 })
+	end
+	return out
+end
+
+function ContainerMenu:focusedButton()
+	local s = self.grid and FocusGrid.focused(self.grid)
+	if s == nil then
+		return nil
+	end
+	return if type(s.id) == "string" then self.containerButtons[tonumber(string.sub(s.id, 2))] else self.inventoryButtons[s.id]
+end
+
+-- Gamepad/keyboard actions while open: d-pad moves focus, confirm = left click.
+-- Returns true when the action was consumed.
+function ContainerMenu:action(a: string): boolean
+	if self.grid == nil then
+		return false
+	end
+	if a == "up" or a == "down" or a == "left" or a == "right" then
+		FocusGrid.move(self.grid, a)
+		return true
+	elseif a == "confirm" then
+		local s = FocusGrid.focused(self.grid)
+		if s then
+			if type(s.id) == "string" then
+				self.onContainerClick(tonumber(string.sub(s.id, 2)), "left")
+			else
+				self.onInventoryClick(s.id, "left")
+			end
+		end
+		return true
+	end
+	return false
+end
+
 function ContainerMenu:render(container, inventory)
 	if container == nil then
 		self.gui.Enabled = false
@@ -87,6 +137,9 @@ function ContainerMenu:render(container, inventory)
 	self.gui.Enabled = true
 	local st = container.state
 	local size = if st.kind == "chest" then 27 else 3
+	if self.gridSize ~= size then
+		self.grid, self.gridSize = FocusGrid.new(layout(size)), size
+	end
 	local labels = { "input", "fuel", "output" }
 	for i = 1, 27 do
 		local b = self.containerButtons[i]
@@ -106,6 +159,12 @@ function ContainerMenu:render(container, inventory)
 	end
 	for i = 1, 36 do
 		self.inventoryButtons[i].Text = itemText(inventory.slots[i])
+	end
+	local focused = self:focusedButton()
+	for _, list in { self.containerButtons, self.inventoryButtons } do
+		for _, b in list do
+			b.BackgroundColor3 = if b == focused then Color3.fromRGB(200, 200, 90) else Color3.fromRGB(139, 139, 139)
+		end
 	end
 	if inventory.cursor then
 		self.title.Text ..= "   [holding " .. itemText(inventory.cursor) .. "]"

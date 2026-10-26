@@ -69,6 +69,12 @@ Mock.addMethods(game, {
 for _, n in { "Heartbeat", "RenderStepped", "Stepped" } do
 	Mock.addEvent(RunService, n)
 end
+Mock.addMethods(RunService, {
+	IsStudio = function()
+		return true -- the mock stands in for a Studio play session
+	end,
+})
+game.CreatorId = 0
 for _, n in { "InputBegan", "InputEnded", "InputChanged" } do
 	Mock.addEvent(UserInputService, n)
 end
@@ -113,6 +119,9 @@ local players = {}
 local originalNew = Instance.new
 Mock.Instance.new = function(cls, parent)
 	local inst = originalNew(cls, parent)
+	if cls == "TextBox" then
+		Mock.addMethods(inst, { CaptureFocus = function() end, ReleaseFocus = function() end })
+	end
 	if cls == "RemoteEvent" then
 		Mock.addMethods(inst, {
 			FireClient = function(self, player, ...)

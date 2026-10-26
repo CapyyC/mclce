@@ -96,6 +96,9 @@ Players.PlayerAdded:Connect(function(player)
 		player:Kick("Could not load your data, please rejoin.")
 		return
 	end
+	-- host commands: the place creator, or anyone while testing in Studio
+	local RunService = game:GetService("RunService")
+	Dimensions.setAdmin(dims, player.UserId, RunService:IsStudio() or player.UserId == game.CreatorId)
 	Dimensions.addPlayer(dims, player.UserId, player.Name, record, true)
 	player.CharacterAdded:Connect(function()
 		task.defer(placeCharacter, player)

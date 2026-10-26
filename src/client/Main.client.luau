@@ -22,6 +22,7 @@ local MobRenderer = require(script.Parent.MobRenderer)
 local ContainerMenu = require(script.Parent.ContainerMenu)
 local WeatherFx = require(script.Parent.WeatherFx)
 local InventoryScreen = require(script.Parent.InventoryScreen)
+local ChatBox = require(script.Parent.ChatBox)
 
 local BS = Config.BLOCK_SIZE
 local C2S_KIND, S2C_KIND = Protocol.C2S, Protocol.S2C
@@ -42,6 +43,9 @@ local mobRenderer = MobRenderer.new(cw, workspace)
 local weatherFx = WeatherFx.new(workspace)
 local hud = Hud.new(player:WaitForChild("PlayerGui"))
 local nearCraftingTable
+local chat = ChatBox.new(player:WaitForChild("PlayerGui"), function(text)
+	table.insert(cw.outgoing, { C2S_KIND.CHAT, text })
+end)
 local inventoryScreen = InventoryScreen.new(player:WaitForChild("PlayerGui"), function(slot, button)
 	ClientWorld.inventoryClick(cw, slot, button)
 end)
@@ -215,6 +219,15 @@ RunService.RenderStepped:Connect(function(dt)
 	local a = Input.actions
 	-- menu input first (an open container takes "back"/crafting keys to close itself)
 	for _, act in Input.menuQueue do
+		if act == "chat" then
+			if menus:isGameplay() and not cw.container then
+				chat:open()
+			end
+			continue
+		end
+		if chat:isTyping() then
+			continue -- keys typed into the chat box are not menu actions
+		end
 		if cw.container and (act == "back" or act == "crafting") then
 			ClientWorld.closeContainer(cw)
 		elseif not cw.container then
@@ -304,6 +317,7 @@ RunService.RenderStepped:Connect(function(dt)
 	renderItems()
 	cw.clock += dt
 	weatherFx:update(cw.weather, cam.CFrame.Position, cw.dimension)
+	chat:render(cw.chat)
 	mobRenderer:update()
 	mobRenderer:endFrame()
 	for _, e in cw.explosions do

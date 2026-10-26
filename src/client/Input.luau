@@ -24,6 +24,7 @@ Input.menuQueue = {}
 local MENU_KEYS = {
 	[Enum.KeyCode.ButtonStart] = "pause", [Enum.KeyCode.P] = "pause",
 	[Enum.KeyCode.ButtonY] = "inventory", [Enum.KeyCode.I] = "inventory",
+	[Enum.KeyCode.T] = "chat",
 	[Enum.KeyCode.ButtonX] = "crafting", [Enum.KeyCode.C] = "crafting", [Enum.KeyCode.E] = "crafting",
 	[Enum.KeyCode.ButtonB] = "back", [Enum.KeyCode.Backspace] = "back",
 	[Enum.KeyCode.DPadLeft] = "left", [Enum.KeyCode.Left] = "left",

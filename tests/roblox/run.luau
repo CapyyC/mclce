@@ -188,6 +188,18 @@ key("Up")
 key("Return")
 check(lm.Pause.Visible == false, "resume closes pause")
 
+print("[mock] chat: host command via the chat box")
+do
+	key("T")
+	local chatGui = player.PlayerGui:FindFirstChild("mclceChat")
+	check(chatGui ~= nil and chatGui.Input.Visible, "T opens the chat box")
+	chatGui.Input.Text = "/time set night"
+	chatGui.Input.FocusLost:Fire(true)
+	H.run(0.3)
+	check(gs.worldTime >= 13000 and gs.worldTime < 13100, "command ran on the server (time " .. gs.worldTime .. ")")
+	check(string.find(chatGui.Log.Text, "Time set") ~= nil, "reply shown in the chat log")
+end
+
 print("[mock] inventory screen: equip a helmet with the d-pad")
 do
 	sp.inventory.slots[sp.inventory.selected] = nil

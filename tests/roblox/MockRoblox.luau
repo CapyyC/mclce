@@ -279,6 +279,7 @@ local Instance = {}
 local EVENTS = {
 	RemoteEvent = { "OnServerEvent", "OnClientEvent" },
 	BindableEvent = { "Event" },
+	TextBox = { "FocusLost", "Focused" },
 	TextButton = { "Activated", "MouseButton1Click", "MouseButton2Click", "MouseButton1Down", "MouseButton1Up" },
 	Player = { "CharacterAdded", "CharacterRemoving" },
 }

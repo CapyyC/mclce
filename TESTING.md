@@ -46,6 +46,11 @@ Prereq: Rojo 7.x, `rojo serve` + Studio plugin (or `rojo build -o mclce.rbxlx`).
 *Game Settings → Security → Enable Studio Access to API Services* to test real DataStores; without it
 the server warns and uses a NON-persistent memory backend.
 
+0. **Tools for testing**: press T to chat; in Studio every player is host, so commands work:
+   `/gamemode creative`, `/time set night`, `/weather thunder`, `/give diamond_pickaxe`,
+   `/give 49 14` (obsidian), `/give flint_and_steel`, `/tp x y z`, `/heal`, `/kill`.
+   Keys: LMB mine/attack, RMB place/use, 1–9/wheel hotbar, C or E crafting (Q/R tabs, arrows,
+   Enter), I inventory, P pause, T chat. Gamepad: RT/LT, LB/RB, X crafting, Y inventory, Start.
 1. **Boot**: Play Solo. Output shows `[mclce] world ready seed=mclce persistent=...` with no errors.
    Require-by-string inside `ReplicatedStorage.Shared` must resolve (`require("../Config")` etc.);
    if Studio rejects relative string requires, that is the first thing to fix.

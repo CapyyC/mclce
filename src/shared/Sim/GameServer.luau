@@ -40,6 +40,7 @@ local Redstone = require("./Redstone")
 local Portals = require("./Portals")
 local Colors = require("../Blocks/Colors")
 local Weather = require("./Weather")
+local Commands = require("./Commands")
 
 local C2S, S2C = Protocol.C2S, Protocol.S2C
 
@@ -108,6 +109,7 @@ export type GameServer = {
 	weather: Weather.Weather,
 	asyncGenerate: ((cx: number, cz: number, dimension: string, seedText: string) -> ())?,
 	pendingGen: { [number]: boolean },
+	admins: { [number]: boolean },
 	furnaces: { [number]: { number } }, -- position key -> {x, y, z}
 	spawners: { [number]: { number } },
 	updates: BlockUpdates.BlockUpdates,
@@ -167,6 +169,7 @@ function GameServer.new(opts: Options): GameServer
 		asyncGenerate = opts.asyncGenerate,
 		weather = Weather.new(seed.lo + 99),
 		pendingGen = {},
+		admins = {},
 		furnaces = {},
 		spawners = {},
 		updates = nil :: any,
@@ -941,8 +944,42 @@ function GameServer.handle(gs: GameServer, id: number, kind: any, args: { any })
 			p.rejected += 1
 		end
 	elseif k == C2S.CHAT then
-		for pid in gs.players do
-			send(gs, pid, S2C.CHAT, p.name, m.text)
+		local reply = Commands.run(m.text, gs.admins[p.id] == true, {
+			setGamemode = function(mode)
+				p.gamemode = mode
+				p.sentVitals = ""
+			end,
+			setTime = function(t)
+				gs.worldTime = t
+				for pid in gs.players do
+					send(gs, pid, S2C.TIME, t)
+				end
+			end,
+			setWeather = function(raining, thundering)
+				gs.weather.raining, gs.weather.thundering = raining, thundering
+				gs.weather.rainTime = if raining then 12000 else 24000
+				for pid in gs.players do
+					send(gs, pid, S2C.WEATHER, Weather.snapshot(gs.weather))
+				end
+			end,
+			inventory = p.inventory,
+			teleport = function(x, y, z)
+				GameServer.teleport(gs, p.id, x, y, z)
+				send(gs, p.id, S2C.RESPAWNED, x, y, z) -- adapter moves the character
+			end,
+			kill = function()
+				GameServer.kill(gs, p, "command")
+			end,
+			heal = function()
+				p.vitals.health, p.vitals.food, p.vitals.saturation = 20, 20, 5
+			end,
+		})
+		if reply then
+			send(gs, p.id, S2C.CHAT, "", reply)
+		else
+			for pid in gs.players do
+				send(gs, pid, S2C.CHAT, p.name, m.text)
+			end
 		end
 	elseif k == C2S.ATTACK then
 		GameServer._attack(gs, p, m.mob)

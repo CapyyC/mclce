@@ -56,6 +56,12 @@ function Dimensions.serverOf(d: Dimensions, pid: number): GameServer.GameServer?
 	return if dim then d.worlds[dim] else nil
 end
 
+function Dimensions.setAdmin(d: Dimensions, pid: number, admin: boolean)
+	for _, gs in d.worlds do
+		gs.admins[pid] = if admin then true else nil
+	end
+end
+
 function Dimensions.addPlayer(d: Dimensions, pid: number, name: string, record: { [string]: any }?, waitForJoin: boolean?)
 	local dim = if record and record.dimension == "nether" then "nether" else "overworld"
 	d.where[pid] = dim
